@@ -1,10 +1,13 @@
 import { View } from 'react-native';
 
-import { Body, Heading, Screen, Segmented } from '@/components/ui';
+import { Body, Button, Heading, Screen, Segmented } from '@/components/ui';
+import { useAuth } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 import { ThemePreference, useTheme } from '@/lib/theme';
 
 export default function SettingsScreen() {
   const { preference, setPreference } = useTheme();
+  const { session } = useAuth();
 
   return (
     <Screen>
@@ -23,6 +26,7 @@ export default function SettingsScreen() {
           Match phone follows your phone&apos;s light or dark setting.
         </Body>
       </View>
+      {session ? <Button label="Log out" variant="outline" onPress={() => supabase?.auth.signOut()} /> : null}
     </Screen>
   );
 }

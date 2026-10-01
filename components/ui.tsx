@@ -1,5 +1,17 @@
 import { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleProp, StyleSheet, Text, TextProps, TextStyle, View, ViewStyle } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleProp,
+  StyleSheet,
+  Text,
+  TextInput,
+  TextInputProps,
+  TextProps,
+  TextStyle,
+  View,
+  ViewStyle,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { fonts, radius, space } from '@/constants/theme';
@@ -253,6 +265,40 @@ export function Stat({ value, label, tone }: { value: string; label: string; ton
         {label}
       </Body>
     </Card>
+  );
+}
+
+export function Field({
+  label,
+  style,
+  ...props
+}: TextInputProps & { label: string; style?: StyleProp<TextStyle> }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ gap: 6 }}>
+      <Body size={13} weight="semibold" tone="muted">
+        {label}
+      </Body>
+      <TextInput
+        accessibilityLabel={label}
+        placeholderTextColor={colors.textMuted}
+        {...props}
+        style={[
+          {
+            height: 48,
+            paddingHorizontal: 14,
+            borderRadius: radius.md,
+            borderWidth: 1,
+            borderColor: colors.borderStrong,
+            backgroundColor: colors.surface,
+            color: colors.text,
+            fontFamily: fonts.bodyMedium,
+            fontSize: 16,
+          },
+          style,
+        ]}
+      />
+    </View>
   );
 }
 

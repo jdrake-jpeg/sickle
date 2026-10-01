@@ -7,6 +7,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
+import { fonts } from '@/constants/theme';
+import { AuthProvider, useAuth } from '@/lib/auth';
 import { SickleThemeProvider, useTheme } from '@/lib/theme';
 
 export {
@@ -48,14 +50,17 @@ export default function RootLayout() {
   }
 
   return (
-    <SickleThemeProvider>
-      <RootLayoutNav />
-    </SickleThemeProvider>
+    <AuthProvider>
+      <SickleThemeProvider>
+        <RootLayoutNav />
+      </SickleThemeProvider>
+    </AuthProvider>
   );
 }
 
 function RootLayoutNav() {
   const { name, colors } = useTheme();
+  const { ready, session, demoMode } = useAuth();
   const base = name === 'dark' ? DarkTheme : DefaultTheme;
   const navigationTheme = {
     ...base,
@@ -70,13 +75,26 @@ function RootLayoutNav() {
     },
   };
 
+  if (!ready) return null;
+  // With Supabase connected, signed-out players only see the sign-in screen.
+  const signedIn = demoMode || Boolean(session);
+
   return (
     <ThemeProvider value={navigationTheme}>
       <StatusBar style={name === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShadowVisible: false, headerTintColor: colors.text }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="match/[id]" options={{ title: 'Confirm result' }} />
-        <Stack.Screen name="settings" options={{ title: 'Settings', presentation: 'modal' }} />
+      <Stack
+        screenOptions={{ headerShadowVisible: false, headerTintColor: colors.text, headerTitleStyle: { fontFamily: fonts.bodyBold } }}>
+        <Stack.Protected guard={signedIn}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="match/[id]" options={{ title: 'Confirm score' }} />
+          <Stack.Screen name="score/[challengeId]" options={{ title: 'Enter score' }} />
+          <Stack.Screen name="court/[id]" options={{ title: 'Court' }} />
+          <Stack.Screen name="player/[id]" options={{ title: 'Player' }} />
+          <Stack.Screen name="settings" options={{ title: 'Settings', presentation: 'modal' }} />
+        </Stack.Protected>
+        <Stack.Protected guard={!signedIn}>
+          <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        </Stack.Protected>
       </Stack>
     </ThemeProvider>
   );

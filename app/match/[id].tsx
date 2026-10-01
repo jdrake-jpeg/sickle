@@ -1,42 +1,80 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Alert, View } from 'react-native';
 
-import { Body, Button, Card, Heading, Screen } from '@/components/ui';
+import { DraftScores, fromGameScores, ScoreEntry, toGameScores } from '@/components/ScoreEntry';
+import { Body, Button, Card, Field, Heading, Screen } from '@/components/ui';
 import { fonts } from '@/constants/theme';
 import { pendingResult } from '@/lib/sample-data';
+import { checkBestOfThree } from '@/lib/scores';
 import { useTheme } from '@/lib/theme';
 
-// Confirm or dispute a result the OTHER team submitted. The database enforces
-// that only a player on the non-submitting team can do this
-// (see respond_to_match_result in supabase/migrations).
+// Confirm a score the other team entered, or dispute it by entering the score
+// you think is right. The database enforces who can do this and how many
+// rounds a dispute gets (confirm_match_result and dispute_match_result in
+// supabase/migrations).
 export default function ConfirmResultScreen() {
   const { colors } = useTheme();
   const r = pendingResult;
+  const [disputing, setDisputing] = useState(false);
+  const [draft, setDraft] = useState<DraftScores>(fromGameScores(r.games));
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
   const winsA = r.games.filter(([a, b]) => a > b).length;
   const winsB = r.games.length - winsA;
   const aWon = winsA > winsB;
 
   const confirm = () => {
-    Alert.alert('Result confirmed', 'Records and the leaderboard are updated.');
+    Alert.alert('Result confirmed', 'Records and the court leaderboard are updated.');
     router.back();
   };
-  const dispute = () => {
-    Alert.alert('Score disputed', 'This match will not count until it is sorted out.');
+
+  const sendCorrection = () => {
+    const games = toGameScores(draft);
+    const check = checkBestOfThree(games);
+    if (!check.ok) return setError(check.error);
+    if (JSON.stringify(games) === JSON.stringify(r.games)) return setError('That is the same score. Confirm it instead.');
+    setError(null);
+    Alert.alert('Correction sent', `${r.teamA} will be asked to accept your score. It won't count until both teams agree.`);
     router.back();
   };
+
+  if (disputing) {
+    return (
+      <Screen>
+        <Card style={{ padding: 14 }}>
+          <Body size={14} tone="subtle">
+            Enter the score you think is right. {r.teamA} can accept it or send one more correction. If you still don&apos;t agree, an admin decides.
+          </Body>
+        </Card>
+        <ScoreEntry teamA={r.teamA} teamB={r.teamB} value={draft} onChange={setDraft} />
+        <Field label="Note (optional)" placeholder="We won game 3 11–8" value={note} onChangeText={setNote} maxLength={500} />
+        {error ? (
+          <Body tone="danger" weight="semibold">
+            {error}
+          </Body>
+        ) : null}
+        <View style={{ gap: 10 }}>
+          <Button label="Send correction" size="lg" onPress={sendCorrection} />
+          <Button label="Back" variant="ghost" onPress={() => setDisputing(false)} />
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
       <Card style={{ padding: 14 }}>
         <Body size={14} tone="subtle">
-          {r.submittedBy} submitted this score {r.submittedAgo}. It only counts toward rankings once your team confirms it.
+          {r.submittedBy} entered this score {r.submittedAgo}. It only counts once your team agrees.
         </Body>
       </Card>
 
       <Card style={{ padding: 16, gap: 16, borderRadius: 20 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Body size={13} tone="muted">
-            {r.court} · Ranked
+            {r.court}
           </Body>
           <Body size={13} tone="muted">
             {r.when}
@@ -59,13 +97,7 @@ export default function ConfirmResultScreen() {
           {r.games.map(([a, b], i) => (
             <View
               key={i}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: 12,
-                borderBottomWidth: i < r.games.length - 1 ? 1 : 0,
-                borderColor: colors.border,
-              }}>
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: i < r.games.length - 1 ? 1 : 0, borderColor: colors.border }}>
               <Body size={13} tone="muted" style={{ flex: 1 }}>
                 Game {i + 1}
               </Body>
@@ -87,8 +119,8 @@ export default function ConfirmResultScreen() {
       </Card>
 
       <View style={{ gap: 10 }}>
-        <Button label="Confirm result" size="lg" onPress={confirm} />
-        <Button label="Dispute score" variant="dangerOutline" onPress={dispute} />
+        <Button label="Confirm score" size="lg" onPress={confirm} />
+        <Button label="That's not right" variant="dangerOutline" onPress={() => setDisputing(true)} />
       </View>
     </Screen>
   );

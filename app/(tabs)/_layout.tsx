@@ -40,7 +40,7 @@ export default function TabLayout() {
         name="challenges"
         options={{
           title: 'Challenges',
-          tabBarBadge: 3,
+          tabBarBadge: 3, // sample count until challenges are wired up
           tabBarIcon: ({ color }) => <TabIcon name={{ ios: 'bolt.fill', android: 'bolt', web: 'bolt' }} color={color} />,
         }}
       />
@@ -51,13 +51,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => (
             <TabIcon name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }} color={color} />
           ),
-        }}
-      />
-      <Tabs.Screen
-        name="rankings"
-        options={{
-          title: 'Rankings',
-          tabBarIcon: ({ color }) => <TabIcon name={{ ios: 'crown.fill', android: 'trophy', web: 'trophy' }} color={color} />,
         }}
       />
       <Tabs.Screen

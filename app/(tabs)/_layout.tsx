@@ -1,67 +1,71 @@
-import { SymbolView } from 'expo-symbols';
-import { Link, Tabs } from 'expo-router';
-import { Platform, Pressable } from 'react-native';
+import { SymbolView, SymbolViewProps } from 'expo-symbols';
+import { Platform, type ColorValue } from 'react-native';
+import { Tabs } from 'expo-router';
 
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+import { fonts } from '@/constants/theme';
+import { useTheme } from '@/lib/theme';
+
+function TabIcon({ name, color }: { name: SymbolViewProps['name']; color: ColorValue }) {
+  return <SymbolView name={name} tintColor={color} size={24} />;
+}
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { colors } = useTheme();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
-        headerShown: useClientOnlyValue(false, true),
+        headerShown: false,
+        tabBarActiveTintColor: colors.accentText,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarStyle: {
+          backgroundColor: colors.background,
+          borderTopColor: colors.border,
+          // Web has no safe-area inset, so give the labels room explicitly.
+          ...Platform.select({ web: { height: 64, paddingBottom: 8 } }),
+        },
+        tabBarLabelStyle: { fontFamily: fonts.bodySemibold, fontSize: 11, lineHeight: 14 },
+        tabBarBadgeStyle: { backgroundColor: colors.danger, color: colors.onDanger },
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Tab One',
+          title: 'Play',
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'chevron.left.forwardslash.chevron.right',
-                android: 'code',
-                web: 'code',
-              }}
-              tintColor={color}
-              size={28}
-            />
-          ),
-          headerRight: () => (
-            <Link href="/modal" asChild>
-              <Pressable style={{ marginRight: 15 }}>
-                {({ pressed }) => (
-                  <SymbolView
-                    name={{ ios: 'info.circle', android: 'info', web: 'info' }}
-                    size={25}
-                    tintColor={Colors[colorScheme].text}
-                    style={{ opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
+            <TabIcon name={{ ios: 'dot.radiowaves.left.and.right', android: 'radar', web: 'radar' }} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="two"
+        name="challenges"
         options={{
-          title: 'Tab Two',
+          title: 'Challenges',
+          tabBarBadge: 3,
+          tabBarIcon: ({ color }) => <TabIcon name={{ ios: 'bolt.fill', android: 'bolt', web: 'bolt' }} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="courts"
+        options={{
+          title: 'Courts',
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'chevron.left.forwardslash.chevron.right',
-                android: 'code',
-                web: 'code',
-              }}
-              tintColor={color}
-              size={28}
-            />
+            <TabIcon name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="rankings"
+        options={{
+          title: 'Rankings',
+          tabBarIcon: ({ color }) => <TabIcon name={{ ios: 'crown.fill', android: 'trophy', web: 'trophy' }} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color }) => (
+            <TabIcon name={{ ios: 'person.crop.circle', android: 'person', web: 'person' }} color={color} />
           ),
         }}
       />

@@ -4,7 +4,9 @@
 //
 // Deploy from the Supabase dashboard (Edge Functions > Deploy a new function >
 // Via editor, name it find-courts) or with `npx supabase functions deploy find-courts`.
-// Only signed-in players can call it ("Verify JWT" stays on).
+// Only signed-in players can call it. "Verify JWT" stays on, but it also lets
+// the public anon key through, so isSignedIn() checks for a real player too.
+// That keeps anyone with the app's public key from running up Google calls.
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +22,7 @@ type Place = {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  if (!(await isSignedIn(req))) return json({ error: 'Sign in to search for courts' }, 401);
 
   const key = Deno.env.get('GOOGLE_PLACES_API_KEY');
   if (!key) return json({ error: 'Google search is not set up yet' }, 503);
@@ -64,6 +67,22 @@ Deno.serve(async (req) => {
     }));
   return json({ courts });
 });
+
+async function isSignedIn(req: Request) {
+  const auth = req.headers.get('Authorization') ?? '';
+  const apikey = req.headers.get('apikey') ?? Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+  if (!auth.startsWith('Bearer ') || !apikey) return false;
+  try {
+    const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+      headers: { Authorization: auth, apikey },
+    });
+    if (!res.ok) return false;
+    const user = await res.json();
+    return typeof user?.id === 'string' && user.is_anonymous !== true;
+  } catch {
+    return false;
+  }
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });

@@ -34,7 +34,13 @@
           "backgroundColor": "#0B0B0B"
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Sickle uses your location to show you to players nearby and to place courts on the map. Other players only see a rough distance."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -16,8 +16,8 @@ insert into public.profiles (id, username, display_name, skill_level) values
   ('00000000-0000-0000-0000-00000000000c', 'tysor', 'Ty', 3.7),
   ('00000000-0000-0000-0000-00000000000d', 'ryan', 'Ryan', 3.7),
   ('00000000-0000-0000-0000-00000000000e', 'rando', 'Rando', 3.0);
-insert into public.courts (id, name, lat, lng) values
-  ('00000000-0000-0000-0000-0000000000c1', 'Test Court', 43.82, -111.79);
+insert into public.courts (id, name, lat, lng, status) values
+  ('00000000-0000-0000-0000-0000000000c1', 'Test Court', 43.82, -111.79, 'approved');
 
 create temp table ids (k text primary key, v uuid);
 grant all on ids to authenticated;

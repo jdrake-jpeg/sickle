@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, View } from 'react-native';
 
 import { LogoInline } from '@/components/Logo';
-import { Avatar, Body, Button, Card, Chip, Display, Field, Heading, ListRow, Screen, SectionHeader, Segmented } from '@/components/ui';
+import { Avatar, Body, Button, Card, Chip, Field, Heading, ListRow, Screen, SectionHeader, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { formatMiles, initialsOf } from '@/lib/format';
 import { getCurrentLocation, getLocationIfAllowed, LatLng, LocationError } from '@/lib/location';

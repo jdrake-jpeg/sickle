@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { Body, Button, Chip, Display, Field, Screen } from '@/components/ui';
+import { SkillPicker } from '@/components/SkillPicker';
+import { Body, Button, Display, Field, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { useProfile } from '@/lib/profile';
 import { supabase } from '@/lib/supabase';
-
-const skills = [2.5, 3.0, 3.5, 4.0, 4.5, 5.0];
 
 // Shown once after sign-up, before the tabs: every player needs a username.
 export default function OnboardingScreen() {
@@ -61,16 +60,7 @@ export default function OnboardingScreen() {
       ) : null}
       <Field label="Name" placeholder="Drake Hanna" value={name} onChangeText={setName} maxLength={40} />
 
-      <View style={{ gap: 8 }}>
-        <Body size={13} weight="semibold" tone="muted">
-          Skill level (optional)
-        </Body>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {skills.map((s) => (
-            <Chip key={s} label={s.toFixed(1)} selected={skill === s} onPress={() => setSkill(skill === s ? null : s)} />
-          ))}
-        </View>
-      </View>
+      <SkillPicker value={skill} onChange={setSkill} />
 
       {error ? (
         <Body tone="danger" weight="semibold">

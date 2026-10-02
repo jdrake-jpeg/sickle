@@ -34,7 +34,7 @@ export default function CourtsScreen() {
     });
   }, []);
 
-  // Courts Google knows about nearby that nobody has added yet.
+  // Mapped pickleball courts nearby that nobody has added yet.
   useEffect(() => {
     if (demoMode || !courts || !located) return;
     findGoogleCourts(here ?? rexburg, courts).then(setSuggestions);
@@ -104,7 +104,7 @@ export default function CourtsScreen() {
               <Body weight="semibold">
                 {pendingCount > 0
                   ? `${pendingCount} ${pendingCount === 1 ? 'court is' : 'courts are'} waiting for review`
-                  : 'Admin: review courts or add them from Google'}
+                  : 'Admin: review courts or add ones found on the map'}
               </Body>
               <Body weight="bold" tone="accent">
                 Review
@@ -132,7 +132,7 @@ export default function CourtsScreen() {
       />
       {suggestions.length > 0 ? (
         <Body size={13} tone="muted">
-          Gray pins are courts Google knows about that aren&apos;t on Sickle yet. Tap one to add it.
+          Gray pins are pickleball courts on the map that aren&apos;t on Sickle yet. Tap one to add it.
         </Body>
       ) : null}
       <Body tone="muted">Win at a court to climb its leaderboard and take the crown.</Body>

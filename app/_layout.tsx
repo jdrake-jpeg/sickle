@@ -102,6 +102,7 @@ function RootLayoutNav() {
           <Stack.Screen name="ratings" options={{ title: 'Your private ratings' }} />
           <Stack.Screen name="profile-edit" options={{ title: 'Edit profile' }} />
           <Stack.Screen name="rules" options={{ title: 'Pickleball rules' }} />
+          <Stack.Screen name="team/new" options={{ title: 'New team' }} />
           <Stack.Screen name="admin/courts" options={{ title: 'Review courts' }} />
           <Stack.Screen name="admin/admins" options={{ title: 'Manage admins' }} />
           <Stack.Screen name="player/[id]" options={{ title: 'Player' }} />

@@ -2,6 +2,7 @@ import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
+import { SickleSlice } from '@/components/SickleSlice';
 import { Body, Button, Card, Display, Heading, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import {
@@ -24,6 +25,7 @@ export default function ChallengesScreen() {
   const rows = useChallenges(demoMode);
   const [tab, setTab] = useState<Tab>('incoming');
   const [busy, setBusy] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState<ChallengeRow | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -42,11 +44,17 @@ export default function ChallengesScreen() {
     setBusy(id);
     try {
       await action();
+      return true;
     } catch (error) {
       Alert.alert("Couldn't do that", error instanceof Error ? error.message : 'Try again.');
+      return false;
     } finally {
       setBusy(null);
     }
+  };
+
+  const accept = async (r: ChallengeRow) => {
+    if (await act(r.challenge_id, () => respondToChallenge(demoMode, r.challenge_id, true))) setAccepted(r);
   };
 
   const askCancel = (r: ChallengeRow) =>
@@ -63,6 +71,16 @@ export default function ChallengesScreen() {
 
   return (
     <Screen>
+      {accepted ? (
+        <SickleSlice
+          title={'CHALLENGE\nACCEPTED'}
+          detail={`${accepted.my_team_name} vs ${accepted.their_team_name}\n${accepted.court_name} · ${formatWhen(accepted.proposed_time)}`}
+          onDone={() => {
+            setAccepted(null);
+            setTab('upcoming');
+          }}
+        />
+      ) : null}
       <View style={{ height: 44, justifyContent: 'center' }}>
         <Display>CHALLENGES</Display>
       </View>
@@ -127,7 +145,7 @@ export default function ChallengesScreen() {
                     label="Accept"
                     style={{ flex: 1 }}
                     disabled={busy === r.challenge_id}
-                    onPress={() => act(r.challenge_id, () => respondToChallenge(demoMode, r.challenge_id, true))}
+                    onPress={() => accept(r)}
                   />
                   <Button
                     label="Decline"

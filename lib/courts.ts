@@ -13,6 +13,8 @@ export type Court = {
   address: string | null;
   indoor: boolean;
   court_count: number | null;
+  has_lights?: boolean | null;
+  lights_until?: number | null;
 };
 
 export type PendingCourt = Court & {
@@ -110,13 +112,60 @@ function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: nu
   return 3958.8 * 2 * Math.asin(Math.sqrt(h));
 }
 
-// Pickleball courts Google knows about near a spot, minus ones already on
-// Sickle. Empty when the find-courts function isn't set up yet.
+// Pickleball courts mapped near a spot, minus ones already on Sickle. Uses
+// Google (the find-courts function) when it's set up, and otherwise
+// OpenStreetMap, which is free and needs no key.
 export async function findGoogleCourts(near: { lat: number; lng: number }, listed: Court[]): Promise<GoogleCourt[]> {
-  if (!supabase) return [];
-  const { data, error } = await supabase.functions.invoke('find-courts', { body: { lat: near.lat, lng: near.lng } });
-  if (error || !data?.courts) return [];
-  return (data.courts as GoogleCourt[]).filter((g) => !listed.some((c) => milesBetween(c, g) < 0.06));
+  let found: GoogleCourt[] = [];
+  if (supabase) {
+    const { data, error } = await supabase.functions.invoke('find-courts', { body: { lat: near.lat, lng: near.lng } });
+    if (!error && data?.courts) found = data.courts as GoogleCourt[];
+  }
+  if (found.length === 0) found = await findOsmCourts(near);
+  return found.filter((g) => !listed.some((c) => milesBetween(c, g) < 0.06));
+}
+
+type OsmElement = { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> };
+
+// Pickleball courts on OpenStreetMap within about 10 miles. Each court there
+// is often its own shape, so ones within ~100 m are merged into one pin.
+export async function findOsmCourts(near: { lat: number; lng: number }): Promise<GoogleCourt[]> {
+  const query = `[out:json][timeout:15];(nwr["sport"~"pickleball"](around:16000,${near.lat},${near.lng}););out center tags 200;`;
+  try {
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(query)}`,
+    });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { elements?: OsmElement[] };
+    const spots: (GoogleCourt & { named: boolean; count: number })[] = [];
+    for (const el of json.elements ?? []) {
+      const lat = el.lat ?? el.center?.lat;
+      const lng = el.lon ?? el.center?.lon;
+      if (lat === undefined || lng === undefined) continue;
+      const name = el.tags?.name;
+      const near100m = spots.find((s) => milesBetween(s, { lat, lng }) < 0.06);
+      if (near100m) {
+        near100m.count++;
+        if (name && !near100m.named) Object.assign(near100m, { name, named: true });
+        continue;
+      }
+      spots.push({ place_id: `osm:${el.type}/${el.id}`, name: name ?? 'Pickleball courts', address: el.tags?.['addr:street'] ?? null, lat, lng, named: Boolean(name), count: 1 });
+    }
+    return spots
+      .sort((a, b) => milesBetween(near, a) - milesBetween(near, b))
+      .slice(0, 40)
+      .map(({ place_id, name, address, lat, lng }) => ({ place_id, name, address, lat, lng }));
+  } catch {
+    return [];
+  }
+}
+
+// Courts already on Sickle, nearest first, with how far away they are.
+export function courtsNear<T extends { lat: number; lng: number }>(here: { lat: number; lng: number } | null, list: T[]): (T & { miles: number | null })[] {
+  if (!here) return list.map((c) => ({ ...c, miles: null }));
+  return list.map((c) => ({ ...c, miles: milesBetween(here, c) })).sort((a, b) => a.miles - b.miles);
 }
 
 // How a court is right now, from players who are there. Reports fade after

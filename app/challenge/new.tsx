@@ -4,7 +4,9 @@ import { Alert, View } from 'react-native';
 
 import { Body, Button, Card, Chip, Heading, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { useCourts } from '@/lib/courts';
+import { courtsNear, useCourts } from '@/lib/courts';
+import { formatMiles } from '@/lib/format';
+import { getLocationIfAllowed, LatLng } from '@/lib/location';
 import { fetchMyTeams, sendChallenge, TeamRow } from '@/lib/matches';
 
 const times = [
@@ -41,6 +43,17 @@ export default function NewChallengeScreen() {
   const [hour, setHour] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const days = nextDays();
+  const [here, setHere] = useState<LatLng | null>(null);
+  const sorted = courtsNear(here, courts ?? []);
+
+  useEffect(() => {
+    getLocationIfAllowed().then(setHere);
+  }, []);
+
+  // Pick the closest court to start with, unless one was passed in.
+  useEffect(() => {
+    if (!courtId && here && sorted.length > 0) setCourtId(sorted[0].id);
+  }, [courtId, here, sorted]);
 
   useEffect(() => {
     fetchMyTeams(demoMode).then((t) => {
@@ -72,8 +85,8 @@ export default function NewChallengeScreen() {
       <Screen>
         <Card style={{ padding: 16, gap: 10 }}>
           <Heading>YOU NEED A PARTNER FIRST</Heading>
-          <Body tone="muted">Challenges are 2 vs 2. Open a friend&apos;s page and tap Create team, then come back.</Body>
-          <Link href="/friends" asChild>
+          <Body tone="muted">Challenges are 2 vs 2. Make a team with a partner, then come back.</Body>
+          <Link href="/team/new" asChild>
             <Button label="Find a partner" />
           </Link>
         </Card>
@@ -98,8 +111,13 @@ export default function NewChallengeScreen() {
       <View style={{ gap: 8 }}>
         <Body weight="semibold">Court</Body>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {(courts ?? []).map((c) => (
-            <Chip key={c.id} label={c.name} selected={courtId === c.id} onPress={() => setCourtId(c.id)} />
+          {sorted.map((c) => (
+            <Chip
+              key={c.id}
+              label={c.miles !== null ? `${c.name} · ${formatMiles(Math.round(c.miles * 10) / 10)}` : c.name}
+              selected={courtId === c.id}
+              onPress={() => setCourtId(c.id)}
+            />
           ))}
         </View>
       </View>

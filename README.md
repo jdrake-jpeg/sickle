@@ -26,6 +26,25 @@ connected, every screen runs on sample data from `lib/sample-data.ts`.
 5. Restart `npx expo start`. The app now asks you to log in, then to pick a
    username.
 
+## Sign in with Google
+
+The sign-in screen has Continue with Google, which also signs new players up.
+To turn it on:
+
+1. In the Google Cloud console, go to APIs & Services > OAuth consent screen
+   (Google Auth Platform) and set it up as External, with the app name Sickle.
+2. Go to Credentials > Create credentials > OAuth client ID, type **Web
+   application**. Under Authorized redirect URIs add
+   `https://<your-project-ref>.supabase.co/auth/v1/callback`. Copy the client ID
+   and client secret.
+3. In Supabase, go to Authentication > Sign In / Providers > Google, turn it on,
+   and paste the client ID and secret.
+4. In Supabase, go to Authentication > URL Configuration and add these Redirect
+   URLs: `exp://**` (Expo Go) and `sickle://**` (real builds).
+
+Before shipping to the App Store, Apple requires Sign in with Apple next to any
+other social login.
+
 ## Location
 
 Looking to Play asks for location the first time you tap Go. In Expo Go the

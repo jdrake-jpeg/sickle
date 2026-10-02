@@ -117,6 +117,11 @@ results directly; the app calls database functions:
 - `expire_unanswered_results`: results nobody answers for 72 hours become
   `unconfirmed`. Schedule it hourly with pg_cron.
 
+After a match is confirmed, the players can privately rate the level each
+other player really played at (`rate_player`, within 14 days). Only the rated
+player sees it (`my_ratings`, `my_rating_summary`, and the friend inbox in
+`friend_activity`). Ratings never change rankings.
+
 Only confirmed matches count in `team_records`, `player_records` and
 `court_leaderboard` (Elo per team per court; rank 1 holds the crown). Admin edits
 to a confirmed match are written to `match_audit_log`.
@@ -136,12 +141,13 @@ challenges (accept or decline), best-of-3 scores both teams agree on, Rexburg
 courts with leaderboards and crowns, block and report, and four tabs (Play,
 Challenges, Courts, Profile). Also: a courts map, court sign-up with admin
 approval, courts found through Google, and friends (requests, a friends list,
-and everyone you've challenged or played). Push notifications are next.
+and everyone you've challenged or played), a private inbox per friend with your
+games and ratings, private player ratings after a match, court conditions
+(wet, windy, icy, crowded; reports fade after 6 hours), and a simple rules page.
+Push notifications are next.
 
-Wired to Supabase so far: sign-in, profile setup, Looking to Play and nearby
-players, player search, teaming up, block and report, the courts map and list,
-court leaderboards, court sign-up and review. Challenges, scores and the Profile
-tab still show sample data.
+Everything is wired to Supabase. Without `.env.local` the app runs in demo mode
+on sample data.
 
 ## Project layout
 

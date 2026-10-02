@@ -98,8 +98,12 @@ export default function FriendsScreen() {
     }
   };
 
-  const row = (person: FriendRow, subtitle: string, right: ReactNode) => (
-    <Link key={person.id} href={{ pathname: '/player/[id]', params: { id: person.id } }} asChild>
+  // Friends open your inbox with them; everyone else opens their player page.
+  const row = (person: FriendRow, subtitle: string, right: ReactNode, inbox = false) => (
+    <Link
+      key={person.id}
+      href={inbox ? { pathname: '/friends/[id]', params: { id: person.id, name: person.name } } : { pathname: '/player/[id]', params: { id: person.id } }}
+      asChild>
       <Pressable accessibilityRole="link">
         <ListRow left={<Avatar initials={initialsOf(person.name)} size={40} />} title={person.name} subtitle={subtitle} right={right} />
       </Pressable>
@@ -153,7 +157,9 @@ export default function FriendsScreen() {
             <Body tone="muted">No friends yet. Add people you play with below, or search for them.</Body>
           </Card>
         ) : null}
-        {accepted.map((p) => row(p, [`@${p.username}`, p.skill?.toFixed(1)].filter(Boolean).join(' · '), null))}
+        {accepted.map((p) =>
+          row(p, [`@${p.username}`, p.skill?.toFixed(1)].filter(Boolean).join(' · '), <Body size={14} weight="bold" tone="accent">Open</Body>, true),
+        )}
       </View>
 
       <View style={{ gap: 8 }}>

@@ -1,54 +1,95 @@
-import { router } from 'expo-router';
+import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, View } from 'react-native';
 
+import { RatePlayers } from '@/components/RatePlayers';
 import { DraftScores, fromGameScores, ScoreEntry, toGameScores } from '@/components/ScoreEntry';
 import { Body, Button, Card, Field, Heading, Screen } from '@/components/ui';
 import { fonts } from '@/constants/theme';
-import { pendingResult } from '@/lib/sample-data';
-import { checkBestOfThree } from '@/lib/scores';
+import { useAuth } from '@/lib/auth';
+import { confirmResult, disputeResult, formatWhen, matchStatusText, timeAgo, useChallenges } from '@/lib/matches';
+import { checkBestOfThree, GameScore } from '@/lib/scores';
 import { useTheme } from '@/lib/theme';
 
-// Confirm a score the other team entered, or dispute it by entering the score
-// you think is right. The database enforces who can do this and how many
-// rounds a dispute gets (confirm_match_result and dispute_match_result in
-// supabase/migrations).
-export default function ConfirmResultScreen() {
+// One match, opened by its challenge id. If the score is waiting on you,
+// confirm it or dispute it by entering the score you think is right. The
+// database enforces who can do this and how many rounds a dispute gets
+// (confirm_match_result and dispute_match_result in supabase/migrations).
+// Once it's confirmed, you can privately rate the other players.
+export default function MatchScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
-  const r = pendingResult;
+  const { demoMode } = useAuth();
+  const rows = useChallenges(demoMode);
+  const row = rows?.find((c) => c.challenge_id === id);
   const [disputing, setDisputing] = useState(false);
-  const [draft, setDraft] = useState<DraftScores>(fromGameScores(r.games));
+  const [draft, setDraft] = useState<DraftScores | null>(null);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const winsA = r.games.filter(([a, b]) => a > b).length;
-  const winsB = r.games.length - winsA;
+  if (!rows) return <Screen>{null}</Screen>;
+  if (!row || !row.match_id || !row.games) {
+    return (
+      <Screen>
+        <Body tone="muted">No score has been entered for this match yet.</Body>
+      </Screen>
+    );
+  }
+
+  const games: GameScore[] = row.games;
+  const r = { teamA: row.my_team_name, teamB: row.their_team_name, games };
+  const winsA = games.filter(([a, b]) => a > b).length;
+  const winsB = games.length - winsA;
   const aWon = winsA > winsB;
+  const canAnswer = row.match_status === 'awaiting_confirmation' && row.awaiting_me;
+  const title = canAnswer ? 'Confirm score' : 'Match';
 
-  const confirm = () => {
-    Alert.alert('Result confirmed', 'Records and the court leaderboard are updated.');
-    router.back();
+  const confirm = async () => {
+    setBusy(true);
+    try {
+      await confirmResult(demoMode, row);
+      Alert.alert('Score confirmed', 'Records and the court leaderboard are updated. Now you can rate how the others played.');
+    } catch (e) {
+      Alert.alert("Couldn't confirm", e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const sendCorrection = () => {
-    const games = toGameScores(draft);
-    const check = checkBestOfThree(games);
+  const sendCorrection = async () => {
+    const next = toGameScores(draft ?? fromGameScores(games));
+    const check = checkBestOfThree(next);
     if (!check.ok) return setError(check.error);
-    if (JSON.stringify(games) === JSON.stringify(r.games)) return setError('That is the same score. Confirm it instead.');
+    if (JSON.stringify(next) === JSON.stringify(games)) return setError('That is the same score. Confirm it instead.');
     setError(null);
-    Alert.alert('Correction sent', `${r.teamA} will be asked to accept your score. It won't count until both teams agree.`);
-    router.back();
+    setBusy(true);
+    try {
+      const status = await disputeResult(demoMode, row, next, note);
+      Alert.alert(
+        status === 'needs_admin' ? 'Sent to an admin' : 'Correction sent',
+        status === 'needs_admin'
+          ? "You two still don't agree, so an admin will decide the score."
+          : `${row.their_team_name} will be asked to accept your score. It won't count until both teams agree.`,
+      );
+      router.back();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (disputing) {
     return (
       <Screen>
+        <Stack.Screen options={{ title: 'Fix the score' }} />
         <Card style={{ padding: 14 }}>
           <Body size={14} tone="subtle">
-            Enter the score you think is right. {r.teamA} can accept it or send one more correction. If you still don&apos;t agree, an admin decides.
+            Enter the score you think is right. {r.teamB} can accept it or send one more correction. If you still don&apos;t agree, an admin decides.
           </Body>
         </Card>
-        <ScoreEntry teamA={r.teamA} teamB={r.teamB} value={draft} onChange={setDraft} />
+        <ScoreEntry teamA={r.teamA} teamB={r.teamB} value={draft ?? fromGameScores(games)} onChange={setDraft} />
         <Field label="Note (optional)" placeholder="We won game 3 11–8" value={note} onChangeText={setNote} maxLength={500} />
         {error ? (
           <Body tone="danger" weight="semibold">
@@ -56,7 +97,10 @@ export default function ConfirmResultScreen() {
           </Body>
         ) : null}
         <View style={{ gap: 10 }}>
-          <Button label="Send correction" size="lg" onPress={sendCorrection} />
+          <Button label={busy ? 'Sending…' : 'Send correction'} size="lg" disabled={busy} onPress={sendCorrection} />
+          <Link href="/rules" asChild>
+            <Button label="Check the rules" variant="outline" />
+          </Link>
           <Button label="Back" variant="ghost" onPress={() => setDisputing(false)} />
         </View>
       </Screen>
@@ -65,19 +109,22 @@ export default function ConfirmResultScreen() {
 
   return (
     <Screen>
+      <Stack.Screen options={{ title }} />
       <Card style={{ padding: 14 }}>
         <Body size={14} tone="subtle">
-          {r.submittedBy} entered this score {r.submittedAgo}. It only counts once your team agrees.
+          {canAnswer
+            ? `${row.submitted_by_name ?? 'The other team'} entered this score ${timeAgo(row.played_at ?? row.created_at)}. It only counts once your team agrees.`
+            : matchStatusText(row) + '.'}
         </Body>
       </Card>
 
       <Card style={{ padding: 16, gap: 16, borderRadius: 20 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Body size={13} tone="muted">
-            {r.court}
+            {row.court_name}
           </Body>
           <Body size={13} tone="muted">
-            {r.when}
+            {formatWhen(row.played_at ?? row.proposed_time)}
           </Body>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -118,10 +165,14 @@ export default function ConfirmResultScreen() {
         </View>
       </Card>
 
-      <View style={{ gap: 10 }}>
-        <Button label="Confirm score" size="lg" onPress={confirm} />
-        <Button label="That's not right" variant="dangerOutline" onPress={() => setDisputing(true)} />
-      </View>
+      {canAnswer ? (
+        <View style={{ gap: 10 }}>
+          <Button label={busy ? 'Saving…' : 'Confirm score'} size="lg" disabled={busy} onPress={confirm} />
+          <Button label="That's not right" variant="dangerOutline" disabled={busy} onPress={() => setDisputing(true)} />
+        </View>
+      ) : null}
+
+      {row.match_status === 'confirmed' ? <RatePlayers demoMode={demoMode} matchId={row.match_id} /> : null}
     </Screen>
   );
 }

@@ -1,11 +1,12 @@
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Link, Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
-import { Avatar, Body, Button, Card, Display, Field, Heading, Screen } from '@/components/ui';
+import { Avatar, Body, Button, Card, Display, Field, Heading, ListRow, Screen, SectionHeader } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { addFriend, fetchRelation, Relation, relationLabel, removeFriend } from '@/lib/friends';
+import { fetchMyTeams, fetchPlayerTeams, TeamRow } from '@/lib/matches';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 
@@ -25,6 +26,16 @@ export default function PlayerScreen() {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [relation, setRelation] = useState<Relation>(null);
+  const [teams, setTeams] = useState<TeamRow[]>([]);
+  const [teamsVersion, setTeamsVersion] = useState(0);
+
+  // Their teams you can challenge (not ones you're on).
+  useEffect(() => {
+    Promise.all([fetchPlayerTeams(demoMode, id), fetchMyTeams(demoMode)]).then(([theirs, mine]) => {
+      const myIds = new Set(mine.map((t) => t.team_id));
+      setTeams(theirs.filter((t) => !myIds.has(t.team_id)));
+    });
+  }, [demoMode, id, teamsVersion]);
 
   useEffect(() => {
     fetchRelation(demoMode, id).then(setRelation);
@@ -68,8 +79,9 @@ export default function PlayerScreen() {
     const name = teamName.trim();
     const ok = await run(() => supabase!.rpc('create_team', { p_partner: player.id, p_name: name || null }));
     if (!ok) return;
-    Alert.alert('Team created', `${name || `You + ${firstName}`} is ready to challenge other teams.`);
-    router.back();
+    Alert.alert('Team created', `${name || `You + ${firstName}`} is ready. Challenge a team from a court leaderboard or a player's page.`);
+    setTeamName('');
+    setTeamsVersion((v) => v + 1);
   };
 
   const sendReport = async () => {
@@ -134,6 +146,30 @@ export default function PlayerScreen() {
           onPress={onFriendPress}
         />
       </View>
+
+      {relation === 'friend' ? (
+        <Link href={{ pathname: '/friends/[id]', params: { id: player.id, name: player.name } }} asChild>
+          <Button label={`Games and ratings with ${firstName}`} variant="outline" />
+        </Link>
+      ) : null}
+
+      {teams.length > 0 ? (
+        <View style={{ gap: 8 }}>
+          <SectionHeader title={`${firstName}'s teams`} />
+          {teams.map((t) => (
+            <ListRow
+              key={t.team_id}
+              title={t.team_name}
+              subtitle={`${t.wins}–${t.losses}`}
+              right={
+                <Link href={{ pathname: '/challenge/new', params: { team: t.team_id, teamName: t.team_name } }} asChild>
+                  <Button label="Challenge" variant="dangerOutline" size="sm" />
+                </Link>
+              }
+            />
+          ))}
+        </View>
+      ) : null}
 
       <Card style={{ padding: 16, gap: 12 }}>
         <Heading>TEAM UP WITH {firstName.toUpperCase()}</Heading>

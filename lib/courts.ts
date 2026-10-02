@@ -118,3 +118,40 @@ export async function findGoogleCourts(near: { lat: number; lng: number }, liste
   if (error || !data?.courts) return [];
   return (data.courts as GoogleCourt[]).filter((g) => !listed.some((c) => milesBetween(c, g) < 0.06));
 }
+
+// How a court is right now, from players who are there. Reports fade after
+// 6 hours (court_conditions in supabase/migrations).
+export type Condition = 'good' | 'wet' | 'windy' | 'icy' | 'crowded';
+export type ConditionReport = { condition: Condition; note: string | null; reporter_name: string; created_at: string };
+
+export const conditions: { value: Condition; label: string; emoji: string }[] = [
+  { value: 'good', label: 'Good to play', emoji: '☀️' },
+  { value: 'wet', label: 'Wet', emoji: '💧' },
+  { value: 'windy', label: 'Windy', emoji: '💨' },
+  { value: 'icy', label: 'Icy', emoji: '🧊' },
+  { value: 'crowded', label: 'Crowded', emoji: '👥' },
+];
+
+export const conditionInfo = (c: Condition) => conditions.find((x) => x.value === c) ?? conditions[0];
+
+export async function fetchCourtConditions(demoMode: boolean, courtId: string): Promise<ConditionReport[]> {
+  if (demoMode || !supabase) {
+    return courtId === 'porter'
+      ? [{ condition: 'windy', note: 'Gusty on the north courts', reporter_name: 'Jack Thompson', created_at: new Date(Date.now() - 40 * 60_000).toISOString() }]
+      : [];
+  }
+  const { data } = await supabase.rpc('court_conditions', { p_court: courtId });
+  return (data ?? []) as ConditionReport[];
+}
+
+export async function fetchLatestConditions(demoMode: boolean): Promise<Record<string, { condition: Condition; created_at: string }>> {
+  if (demoMode || !supabase) return { porter: { condition: 'windy', created_at: new Date(Date.now() - 40 * 60_000).toISOString() } };
+  const { data } = await supabase.rpc('latest_court_conditions');
+  return Object.fromEntries(((data ?? []) as { court_id: string; condition: Condition; created_at: string }[]).map((r) => [r.court_id, r]));
+}
+
+export async function reportCondition(demoMode: boolean, courtId: string, condition: Condition, note: string) {
+  if (demoMode || !supabase) return;
+  const { error } = await supabase.rpc('report_court_condition', { p_court: courtId, p_condition: condition, p_note: note.trim() || null });
+  if (error) throw new Error(error.message);
+}

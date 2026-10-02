@@ -5,8 +5,9 @@ import { Pressable, View } from 'react-native';
 import { CourtMap } from '@/components/CourtMap';
 import { Body, Button, Card, Display, Heading, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { courtMeta, fetchLeaderboard, fetchMyTeamIds, fetchPendingCourts, findGoogleCourts, GoogleCourt, useCourts } from '@/lib/courts';
+import { Condition, conditionInfo, courtMeta, fetchLatestConditions, fetchLeaderboard, fetchMyTeamIds, fetchPendingCourts, findGoogleCourts, GoogleCourt, useCourts } from '@/lib/courts';
 import { getLocationIfAllowed, LatLng, rexburg } from '@/lib/location';
+import { timeAgo } from '@/lib/matches';
 import { useProfile } from '@/lib/profile';
 import { courts as sampleCourts } from '@/lib/sample-data';
 import { useTheme } from '@/lib/theme';
@@ -23,6 +24,7 @@ export default function CourtsScreen() {
   const [here, setHere] = useState<LatLng | null>(null);
   const [located, setLocated] = useState(false);
   const [suggestions, setSuggestions] = useState<GoogleCourt[]>([]);
+  const [latest, setLatest] = useState<Record<string, { condition: Condition; created_at: string }>>({});
   const isAdmin = Boolean(profile?.is_admin);
 
   useEffect(() => {
@@ -42,6 +44,7 @@ export default function CourtsScreen() {
   useFocusEffect(
     useCallback(() => {
       reload();
+      fetchLatestConditions(demoMode).then(setLatest);
       if (isAdmin) fetchPendingCourts(demoMode).then((p) => setPendingCount(p.length));
     }, [reload, isAdmin, demoMode]),
   );
@@ -143,6 +146,7 @@ export default function CourtsScreen() {
 
       {(courts ?? []).map((court) => {
         const standing = standings[court.id];
+        const now = latest[court.id];
         return (
           <Link key={court.id} href={`/court/${court.id}`} asChild>
             <Pressable accessibilityRole="link">
@@ -161,6 +165,11 @@ export default function CourtsScreen() {
                     </Body>
                   ) : null}
                 </View>
+                {now ? (
+                  <Body size={14} weight="semibold">
+                    {conditionInfo(now.condition).emoji} {conditionInfo(now.condition).label} · {timeAgo(now.created_at)}
+                  </Body>
+                ) : null}
                 {standing?.champs ? (
                   <View style={{ backgroundColor: colors.accentFill, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, gap: 1 }}>
                     <Heading size={11} tone="onAccent" style={{ letterSpacing: 1 }}>

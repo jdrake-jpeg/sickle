@@ -17,9 +17,45 @@ connected, every screen runs on sample data from `lib/sample-data.ts`.
 
 1. Create a project at supabase.com.
 2. Copy `.env.example` to `.env.local` and paste in the project URL and anon key
-   (Project Settings > API).
+   (Project Settings > API). Never put the `service_role` key in the app.
 3. Apply the database schema: `npx supabase link` then `npx supabase db push`,
-   or paste `supabase/migrations/20261001000000_init.sql` into the SQL editor.
+   or paste each file in `supabase/migrations/` into the SQL editor, oldest first.
+4. For testing, turn off email confirmation (Authentication > Sign In / Providers >
+   Email > Confirm email) so new accounts can log in right away. Turn it back on
+   before launch.
+5. Restart `npx expo start`. The app now asks you to log in, then to pick a
+   username.
+
+## Location
+
+Looking to Play asks for location the first time you tap Go. In Expo Go the
+prompt names Expo Go rather than Sickle; that's expected. If you said no, turn
+it back on in your phone's Settings under Expo Go > Location. Only a rough
+position is stored (rounded to about 1 km) and other players see a distance,
+never coordinates.
+
+## Courts, maps and admins
+
+Courts come from Sickle's own list, not from Google. Anyone can submit a court
+from the Courts tab (Add a court): they drop a pin and give it a name. It stays
+hidden until an admin approves it; then it shows on the map, gets a leaderboard
+and can host challenges.
+
+Make yourself an admin after you've signed up in the app, by running this in the
+Supabase SQL editor:
+
+```sql
+update public.profiles set is_admin = true where username = 'your_username';
+```
+
+Admins see a Review banner on the Courts tab and a Review submitted courts
+button in Settings.
+
+The map uses Apple Maps on iPhone and Google Maps on Android. Expo Go needs no
+map key. For an Android store build, create a Google Maps API key (Google Cloud
+console > APIs & Services, enable "Maps SDK for Android"), restrict it to
+Android apps with your package name and signing certificate, and set it as the
+`GOOGLE_MAPS_ANDROID_API_KEY` EAS environment variable. Don't commit it.
 
 ## How results are verified
 
@@ -52,7 +88,13 @@ Built to the October first release in the plan doc: sign-up and login, profiles,
 Looking to Play with nearby players and search, unlimited two-person teams,
 challenges (accept or decline), best-of-3 scores both teams agree on, Rexburg
 courts with leaderboards and crowns, block and report, and four tabs (Play,
-Challenges, Courts, Profile). Push notifications are next.
+Challenges, Courts, Profile). Also: a courts map and court sign-up with admin
+approval. Push notifications are next.
+
+Wired to Supabase so far: sign-in, profile setup, Looking to Play and nearby
+players, player search, teaming up, block and report, the courts map and list,
+court leaderboards, court sign-up and review. Challenges, scores and the Profile
+tab still show sample data.
 
 ## Project layout
 

@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 
 import { fonts } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { ProfileProvider, useProfile } from '@/lib/profile';
 import { SickleThemeProvider, useTheme } from '@/lib/theme';
 
 export {
@@ -51,9 +52,11 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <SickleThemeProvider>
-        <RootLayoutNav />
-      </SickleThemeProvider>
+      <ProfileProvider>
+        <SickleThemeProvider>
+          <RootLayoutNav />
+        </SickleThemeProvider>
+      </ProfileProvider>
     </AuthProvider>
   );
 }
@@ -61,6 +64,7 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const { name, colors } = useTheme();
   const { ready, session, demoMode } = useAuth();
+  const profile = useProfile();
   const base = name === 'dark' ? DarkTheme : DefaultTheme;
   const navigationTheme = {
     ...base,
@@ -75,22 +79,29 @@ function RootLayoutNav() {
     },
   };
 
-  if (!ready) return null;
-  // With Supabase connected, signed-out players only see the sign-in screen.
+  if (!ready || (session && !profile.ready)) return null;
+  // With Supabase connected, signed-out players only see the sign-in screen,
+  // and new players set up a profile before anything else.
   const signedIn = demoMode || Boolean(session);
+  const hasProfile = Boolean(profile.profile);
 
   return (
     <ThemeProvider value={navigationTheme}>
       <StatusBar style={name === 'dark' ? 'light' : 'dark'} />
       <Stack
         screenOptions={{ headerShadowVisible: false, headerTintColor: colors.text, headerTitleStyle: { fontFamily: fonts.bodyBold } }}>
-        <Stack.Protected guard={signedIn}>
+        <Stack.Protected guard={signedIn && hasProfile}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="match/[id]" options={{ title: 'Confirm score' }} />
           <Stack.Screen name="score/[challengeId]" options={{ title: 'Enter score' }} />
           <Stack.Screen name="court/[id]" options={{ title: 'Court' }} />
+          <Stack.Screen name="court/new" options={{ title: 'Add a court' }} />
+          <Stack.Screen name="admin/courts" options={{ title: 'Review courts' }} />
           <Stack.Screen name="player/[id]" options={{ title: 'Player' }} />
           <Stack.Screen name="settings" options={{ title: 'Settings', presentation: 'modal' }} />
+        </Stack.Protected>
+        <Stack.Protected guard={signedIn && !hasProfile}>
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />

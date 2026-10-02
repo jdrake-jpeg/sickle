@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { AccessibilityInfo, Animated, Easing, Modal, Platform, Pressable, useWindowDimensions, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 
+import { LogoBar } from '@/components/Logo';
 import { Body, Display } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
 
@@ -96,6 +97,7 @@ export function SickleSlice({ title, detail, onDone }: { title: string; detail: 
                 opacity: card,
                 transform: [{ scale: card.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) }],
               }}>
+              <LogoBar width={180} onDark={false} />
               <Display size={46} tone="onAccent" style={{ textAlign: 'center', lineHeight: 56, paddingTop: 4 }}>
                 {title}
               </Display>

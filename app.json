@@ -8,11 +8,15 @@
     "scheme": "sickle",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "icon": {
+        "light": "./assets/images/icon-light.png",
+        "dark": "./assets/images/icon.png"
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0B0B0B",
+        "backgroundColor": "#040404",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -30,6 +34,7 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
+          "imageWidth": 240,
           "resizeMode": "contain",
           "backgroundColor": "#0B0B0B"
         }

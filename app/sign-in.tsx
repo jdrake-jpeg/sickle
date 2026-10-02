@@ -51,7 +51,7 @@ export default function SignInScreen() {
   return (
     <Screen>
       <View style={{ alignItems: 'center', gap: 10, paddingTop: 40, paddingBottom: 12 }}>
-        <Logo size={120} />
+        <Logo width={260} />
         <Body tone="muted" style={{ textAlign: 'center' }}>
           Find a partner nearby. Challenge up. Take the crown.
         </Body>

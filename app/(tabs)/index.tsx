@@ -2,7 +2,7 @@ import { Link } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, View } from 'react-native';
 
-import { LogoInline } from '@/components/Logo';
+import { LogoWordmark } from '@/components/Logo';
 import { Avatar, Body, Button, Card, Chip, Field, Heading, ListRow, Screen, SectionHeader, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { formatMiles, initialsOf } from '@/lib/format';
@@ -167,7 +167,7 @@ export default function PlayScreen() {
   return (
     <Screen>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44 }}>
-        <LogoInline size={28} />
+        <LogoWordmark width={130} />
         <Link href="/friends" asChild>
           <Button label="Friends" variant="outline" size="sm" />
         </Link>

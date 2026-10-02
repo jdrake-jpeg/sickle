@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { Body, Button, Display, Field, Screen, Segmented } from '@/components/ui';
+import { Logo } from '@/components/Logo';
+import { Body, Button, Field, Screen, Segmented } from '@/components/ui';
 import { signInWithGoogle } from '@/lib/google-auth';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
@@ -50,8 +51,7 @@ export default function SignInScreen() {
   return (
     <Screen>
       <View style={{ alignItems: 'center', gap: 10, paddingTop: 40, paddingBottom: 12 }}>
-        <Display size={64}>SICKLE</Display>
-        <View style={{ width: 160, height: 6, backgroundColor: colors.danger, transform: [{ skewX: '-24deg' }] }} />
+        <Logo size={120} />
         <Body tone="muted" style={{ textAlign: 'center' }}>
           Find a partner nearby. Challenge up. Take the crown.
         </Body>

@@ -16,6 +16,8 @@ export const supabase = isSupabaseConfigured
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
+        // Code flow, needed for Sign in with Google in the app.
+        flowType: 'pkce',
       },
     })
   : null;

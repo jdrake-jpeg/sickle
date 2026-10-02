@@ -4,9 +4,10 @@
 -- player who submitted it and to admins, until an admin approves it. Only
 -- approved courts show on the map, get leaderboards and can host challenges.
 --
--- Admins are profiles with is_admin = true. Players can't set it themselves;
--- grant it from the Supabase SQL editor:
+-- Admins are profiles with is_admin = true. Players can't set it themselves.
+-- Make the first admin from the Supabase SQL editor:
 --   update public.profiles set is_admin = true where username = 'drake';
+-- After that, admins grant or remove admin for others in the app (set_admin).
 
 -- ---------------------------------------------------------------------------
 -- Admins
@@ -26,6 +27,25 @@ security definer
 set search_path = ''
 as $$
   select coalesce((select is_admin from public.profiles where id = auth.uid()), false);
+$$;
+
+-- Only admins can make someone an admin or remove it. There's always at least
+-- one admin left, so nobody can lock everyone out.
+create function public.set_admin(p_profile uuid, p_admin boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_admin() then raise exception 'Only admins can change who is an admin'; end if;
+  perform 1 from public.profiles where id = p_profile for update;
+  if not found then raise exception 'Unknown player'; end if;
+  if not p_admin and (select count(*) from public.profiles where is_admin and id <> p_profile) = 0 then
+    raise exception 'Sickle needs at least one admin';
+  end if;
+  update public.profiles set is_admin = p_admin where id = p_profile;
+end;
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -174,12 +194,14 @@ $$;
 
 revoke execute on function
   public.is_admin(),
+  public.set_admin(uuid, boolean),
   public.submit_court(text, double precision, double precision, text, integer, boolean, text),
   public.review_court(uuid, boolean, text, text),
   public.send_challenge(uuid, uuid, uuid, timestamptz)
 from public, anon;
 grant execute on function
   public.is_admin(),
+  public.set_admin(uuid, boolean),
   public.submit_court(text, double precision, double precision, text, integer, boolean, text),
   public.review_court(uuid, boolean, text, text),
   public.send_challenge(uuid, uuid, uuid, timestamptz)

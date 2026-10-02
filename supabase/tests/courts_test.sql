@@ -79,6 +79,19 @@ select public.submit_court('Real Court', 10, 10);
 select public.submit_court('Spot ' || n, 20 + n, 20) from generate_series(1, 4) n;
 select pg_temp.expect_error($$select public.submit_court('Spot 6', 30, 30)$$, 'You have 5 courts waiting');
 
+-- Admin access: only admins grant or remove it, and one admin always remains.
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000f2';
+select pg_temp.expect_error($$select public.set_admin(auth.uid(), true)$$, 'Only admins can change');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000f1';
+select pg_temp.expect_error($$select public.set_admin(auth.uid(), false)$$, 'Sickle needs at least one admin');
+select public.set_admin('00000000-0000-0000-0000-0000000000f2', true);
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000f2';
+do $$ begin assert public.is_admin(); end $$;
+select public.set_admin('00000000-0000-0000-0000-0000000000f1', false);
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000f1';
+do $$ begin assert not public.is_admin(); end $$;
+select pg_temp.expect_error($$select public.review_court(gen_random_uuid(), true)$$, 'Only admins can review');
+
 reset role;
 reset request.jwt.claim.sub;
 \echo 'Court submission tests passed'

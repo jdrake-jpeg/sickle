@@ -35,6 +35,9 @@ export default function SettingsScreen() {
           <Link href="/admin/courts" asChild>
             <Button label="Review submitted courts" variant="outline" />
           </Link>
+          <Link href="/admin/admins" asChild>
+            <Button label="Manage admins" variant="outline" />
+          </Link>
         </View>
       ) : null}
       {session ? <Button label="Log out" variant="outline" onPress={() => supabase?.auth.signOut()} /> : null}

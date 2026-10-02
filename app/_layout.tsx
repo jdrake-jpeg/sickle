@@ -97,6 +97,7 @@ function RootLayoutNav() {
           <Stack.Screen name="court/[id]" options={{ title: 'Court' }} />
           <Stack.Screen name="court/new" options={{ title: 'Add a court' }} />
           <Stack.Screen name="admin/courts" options={{ title: 'Review courts' }} />
+          <Stack.Screen name="admin/admins" options={{ title: 'Manage admins' }} />
           <Stack.Screen name="player/[id]" options={{ title: 'Player' }} />
           <Stack.Screen name="settings" options={{ title: 'Settings', presentation: 'modal' }} />
         </Stack.Protected>

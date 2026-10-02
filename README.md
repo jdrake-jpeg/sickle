@@ -48,8 +48,12 @@ Supabase SQL editor:
 update public.profiles set is_admin = true where username = 'your_username';
 ```
 
-Admins see a Review banner on the Courts tab and a Review submitted courts
-button in Settings.
+That's the only time you need SQL. Admins see a Review banner on the Courts tab,
+and Settings has Review submitted courts and Manage admins, where an admin can
+make another player an admin or remove one. The database checks this, so
+nobody else can, and the last admin can't be removed. Other players never see
+these screens. (In demo mode, with no Supabase, you see them so you can look
+around.)
 
 The map uses Apple Maps on iPhone and Google Maps on Android. Expo Go needs no
 map key. For an Android store build, create a Google Maps API key (Google Cloud

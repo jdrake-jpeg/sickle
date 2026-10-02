@@ -2,7 +2,8 @@ import { Link, Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
-import { Avatar, Body, Button, Card, Display, Field, Heading, ListRow, Screen, SectionHeader } from '@/components/ui';
+import { tierOf } from '@/components/SkillPicker';
+import { Avatar, Body, Button, Card, Display, Field, Heading, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { addFriend, fetchRelation, Relation, relationLabel, removeFriend } from '@/lib/friends';
@@ -28,6 +29,16 @@ export default function PlayerScreen() {
   const [relation, setRelation] = useState<Relation>(null);
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [teamsVersion, setTeamsVersion] = useState(0);
+  const [stats, setStats] = useState<{ wins: number | null; losses: number | null; hidden: boolean } | null>(null);
+
+  // Their record, unless they've hidden it in Settings.
+  useEffect(() => {
+    if (demoMode || !supabase) {
+      setStats({ wins: 12, losses: 7, hidden: false });
+      return;
+    }
+    supabase.rpc('player_stats', { p_profile: id }).then(({ data }) => setStats(((data ?? []) as typeof stats[])[0] ?? null));
+  }, [demoMode, id]);
 
   // Their teams you can challenge (not ones you're on).
   useEffect(() => {
@@ -135,7 +146,7 @@ export default function PlayerScreen() {
         <Avatar initials={initialsOf(player.name)} size={88} />
         <Display size={26}>{player.name.toUpperCase()}</Display>
         <Body tone="muted">
-          {[`@${player.username}`, player.skill ? `Skill ${player.skill.toFixed(1)}` : null, distance ? `${distance} away` : null]
+          {[`@${player.username}`, player.skill ? `${Number(player.skill).toFixed(1)} ${tierOf(Number(player.skill))}` : null, distance ? `${distance} away` : null]
             .filter(Boolean)
             .join(' · ')}
         </Body>
@@ -146,6 +157,23 @@ export default function PlayerScreen() {
           onPress={onFriendPress}
         />
       </View>
+
+      {stats ? (
+        stats.hidden && stats.wins == null ? (
+          <Card style={{ padding: 14 }}>
+            <Body tone="muted">{firstName} keeps their record private.</Body>
+          </Card>
+        ) : (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Stat value={`${stats.wins ?? 0}–${stats.losses ?? 0}`} label="Record" />
+            <Stat
+              value={(stats.wins ?? 0) + (stats.losses ?? 0) > 0 ? `${Math.round(((stats.wins ?? 0) / ((stats.wins ?? 0) + (stats.losses ?? 0))) * 100)}%` : '–'}
+              label="Win rate"
+              tone="accent"
+            />
+          </View>
+        )
+      ) : null}
 
       {relation === 'friend' ? (
         <Link href={{ pathname: '/friends/[id]', params: { id: player.id, name: player.name } }} asChild>

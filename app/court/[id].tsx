@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
 import { CourtMap } from '@/components/CourtMap';
+import { LightsPicker, lightsText, LightsValue, saveLights } from '@/components/LightsPicker';
 import { Body, Button, Card, Chip, Display, Field, Heading, Screen, SectionHeader } from '@/components/ui';
 import { fonts } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
@@ -36,6 +37,18 @@ export default function CourtScreen() {
   const [picked, setPicked] = useState<Condition | null>(null);
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
+  const [editingLights, setEditingLights] = useState<LightsValue | null>(null);
+
+  const submitLights = async () => {
+    if (!editingLights || !court) return;
+    try {
+      await saveLights(demoMode, id, editingLights);
+      setCourt({ ...court, has_lights: editingLights.has, lights_until: editingLights.until });
+      setEditingLights(null);
+    } catch (e) {
+      Alert.alert("Couldn't save that", e instanceof Error ? e.message : 'Try again.');
+    }
+  };
 
   const loadReports = useCallback(() => {
     fetchCourtConditions(demoMode, id).then(setReports);
@@ -63,14 +76,14 @@ export default function CourtScreen() {
       const sample = sampleCourts.find((c) => c.id === id);
       setCourt(
         sample
-          ? { id: sample.id, name: sample.name, lat: sample.lat, lng: sample.lng, address: null, indoor: sample.meta.startsWith('Indoor'), court_count: Number(sample.meta.match(/(\d+) courts/)?.[1]) || null }
+          ? { id: sample.id, name: sample.name, lat: sample.lat, lng: sample.lng, address: null, indoor: sample.meta.startsWith('Indoor'), court_count: Number(sample.meta.match(/(\d+) courts/)?.[1]) || null, has_lights: sample.id === 'porter', lights_until: sample.id === 'porter' ? 22 : null }
           : null,
       );
       setRows((sample?.leaderboard ?? []).map((r) => ({ ...r, teamId: `${id}-${r.rank}`, mine: Boolean(r.mine) })));
       return;
     }
     (async () => {
-      const { data } = await supabase!.from('courts').select('id, name, lat, lng, address, indoor, court_count').eq('id', id).maybeSingle();
+      const { data } = await supabase!.from('courts').select('*').eq('id', id).maybeSingle();
       setCourt((data as Court | null) ?? null);
       if (!data) return;
       const [board, mine] = await Promise.all([fetchLeaderboard(id), fetchMyTeamIds(session?.user.id)]);
@@ -104,6 +117,31 @@ export default function CourtScreen() {
 
       <CourtMap height={160} interactive={false} center={court} courts={[{ id: court.id, name: court.name, lat: court.lat, lng: court.lng }]} />
       <Button label="Directions" variant="outline" size="sm" onPress={() => openDirections(court)} />
+
+      <Card style={{ padding: 16, gap: 10 }}>
+        <SectionHeader title="Lights" />
+        {editingLights ? (
+          <>
+            <LightsPicker value={editingLights} onChange={setEditingLights} />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Button label="Save" size="sm" style={{ flex: 1 }} onPress={submitLights} />
+              <Button label="Cancel" variant="ghost" size="sm" onPress={() => setEditingLights(null)} />
+            </View>
+          </>
+        ) : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <Body weight="semibold" style={{ flex: 1 }}>
+              {lightsText(court.has_lights, court.lights_until) ?? "Nobody's said yet if there are lights."}
+            </Body>
+            <Button
+              label={court.has_lights == null ? 'Add info' : 'Fix it'}
+              variant="outline"
+              size="sm"
+              onPress={() => setEditingLights({ has: court.has_lights ?? null, until: court.lights_until ?? null })}
+            />
+          </View>
+        )}
+      </Card>
 
       <Card style={{ padding: 16, gap: 10 }}>
         <SectionHeader title="Conditions now" detail="Last 6 hours" />

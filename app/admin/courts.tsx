@@ -62,7 +62,7 @@ export default function ReviewCourtsScreen() {
     <Screen>
       <Body tone="muted">
         Check each spot on the map before approving it. Approved courts show for everyone and can host ranked matches. Courts you add
-        from Google go straight on the map.
+        from the map list go straight on the map.
       </Body>
       {pending && pending.length === 0 ? (
         <Card style={{ padding: 16 }}>
@@ -75,13 +75,13 @@ export default function ReviewCourtsScreen() {
 
       {!demoMode ? (
         <View style={{ gap: 8 }}>
-          <SectionHeader title="From Google" detail="Not on Sickle yet" />
+          <SectionHeader title="Found on the map" detail="Not on Sickle yet" />
           {google === null ? <Body tone="muted">Looking…</Body> : null}
           {google && google.length === 0 ? (
             <Card style={{ padding: 16 }}>
               <Body tone="muted">
-                Nothing new from Google nearby. If you expected some, check that the find-courts function and its Google key are set
-                up (see the README).
+                No mapped pickleball courts nearby that aren&apos;t on Sickle already. You can still add one by hand from the Courts
+                tab.
               </Body>
             </Card>
           ) : null}

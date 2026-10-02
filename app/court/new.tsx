@@ -1,11 +1,13 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 
 import { CourtMap } from '@/components/CourtMap';
-import { Body, Button, Chip, Field, Screen, Segmented } from '@/components/ui';
+import { LightsPicker, LightsValue, saveLights } from '@/components/LightsPicker';
+import { Body, Button, Chip, Field, ListRow, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { findGoogleCourts, GoogleCourt } from '@/lib/courts';
+import { courtMeta, courtsNear, findGoogleCourts, GoogleCourt, useCourts } from '@/lib/courts';
+import { formatMiles } from '@/lib/format';
 import { useProfile } from '@/lib/profile';
 import { getCurrentLocation, LatLng } from '@/lib/location';
 import { supabase } from '@/lib/supabase';
@@ -32,6 +34,11 @@ export default function NewCourtScreen() {
   const [setting, setSetting] = useState<Setting>('outdoor');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [lights, setLights] = useState<LightsValue>({ has: null, until: null });
+  const [here, setHere] = useState<LatLng | null>(null);
+  const { courts } = useCourts();
+  // Courts already on Sickle within about a mile: pick one instead of adding it again.
+  const listedNearby = courtsNear(prefilledSpot ?? here, courts ?? []).filter((c) => c.miles !== null && c.miles < 1).slice(0, 5);
 
   const locateMe = async () => {
     try {
@@ -48,6 +55,7 @@ export default function NewCourtScreen() {
     (async () => {
       try {
         const here = await getCurrentLocation();
+        setHere(here);
         setCenter(here);
         setPin(here);
         if (!demoMode) setNearby((await findGoogleCourts(here, [])).slice(0, 6));
@@ -86,7 +94,7 @@ export default function NewCourtScreen() {
       return;
     }
     setBusy(true);
-    const { error } = await supabase.rpc('submit_court', {
+    const { data: courtId, error } = await supabase.rpc('submit_court', {
       p_name: name.trim(),
       p_lat: pin.lat,
       p_lng: pin.lng,
@@ -96,6 +104,7 @@ export default function NewCourtScreen() {
       p_note: note.trim() || null,
       p_google_place_id: placeId,
     });
+    if (!error && courtId && lights.has !== null) await saveLights(false, courtId as string, lights).catch(() => {});
     setBusy(false);
     if (error) {
       Alert.alert("Couldn't add the court", error.message);
@@ -108,6 +117,31 @@ export default function NewCourtScreen() {
 
   return (
     <Screen>
+      {listedNearby.length > 0 ? (
+        <View style={{ gap: 8 }}>
+          <Body size={13} weight="semibold" tone="muted">
+            Already on Sickle near you. Tap one to use it:
+          </Body>
+          {listedNearby.map((c) => (
+            <Link key={c.id} href={{ pathname: '/court/[id]', params: { id: c.id } }} asChild>
+              <Pressable accessibilityRole="link">
+                <ListRow
+                  title={c.name}
+                  subtitle={[courtMeta(c), c.miles !== null ? formatMiles(Math.round(c.miles * 10) / 10) : null].filter(Boolean).join(' · ')}
+                  right={
+                    <Body size={14} weight="bold" tone="accent">
+                      Open
+                    </Body>
+                  }
+                />
+              </Pressable>
+            </Link>
+          ))}
+          <Body size={13} weight="semibold" tone="muted">
+            Not there? Add it below.
+          </Body>
+        </View>
+      ) : null}
       <Body tone="muted">Put the pin right on the courts. Tap the map or drag the pin to move it.</Body>
       {nearby.length > 0 ? (
         <View style={{ gap: 8 }}>
@@ -146,6 +180,7 @@ export default function NewCourtScreen() {
           Enter a number from 1 to 50.
         </Body>
       ) : null}
+      <LightsPicker value={lights} onChange={setLights} />
       <Field
         label="Anything the admin should know? (optional)"
         placeholder="Lights until 10, bring your own net"

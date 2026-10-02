@@ -2,6 +2,7 @@ import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { tierOf } from '@/components/SkillPicker';
 import { Avatar, Body, Button, Card, Display, Heading, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
@@ -58,7 +59,7 @@ export default function ProfileScreen() {
         <View style={{ gap: 4, flex: 1 }}>
           <Display size={28}>{name.toUpperCase()}</Display>
           <Body size={13} tone="muted">
-            {profile?.skill_level ? `Skill ${Number(profile.skill_level).toFixed(1)}` : 'No skill level yet. Tap Edit to add one.'}
+            {profile?.skill_level ? `${Number(profile.skill_level).toFixed(1)} · ${tierOf(Number(profile.skill_level))}` : 'No skill level yet. Set it in Settings.'}
           </Body>
         </View>
       </View>
@@ -99,13 +100,13 @@ export default function ProfileScreen() {
       <View style={{ gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <SectionHeader title="My teams" />
-          <Link href="/friends" asChild>
+          <Link href="/team/new" asChild>
             <Button label="+ New team" size="sm" />
           </Link>
         </View>
         {teams.length === 0 ? (
           <Card style={{ padding: 16 }}>
-            <Body tone="muted">No teams yet. Open a friend&apos;s page and tap Create team.</Body>
+            <Body tone="muted">No teams yet. Tap + New team and pick a partner.</Body>
           </Card>
         ) : null}
         {teams.map((team) => (

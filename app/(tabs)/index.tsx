@@ -165,9 +165,14 @@ export default function PlayScreen() {
 
   return (
     <Screen>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 44 }}>
-        <Display size={28}>SICKLE</Display>
-        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: colors.accentFill }} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Display size={28}>SICKLE</Display>
+          <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: colors.accentFill }} />
+        </View>
+        <Link href="/friends" asChild>
+          <Button label="Friends" variant="outline" size="sm" />
+        </Link>
       </View>
 
       <Card style={{ padding: 16, gap: 14, borderRadius: 20 }}>

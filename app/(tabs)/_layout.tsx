@@ -3,6 +3,8 @@ import { Platform, type ColorValue } from 'react-native';
 import { Tabs } from 'expo-router';
 
 import { fonts } from '@/constants/theme';
+import { useAuth } from '@/lib/auth';
+import { needsMe, useChallengePolling, useChallenges } from '@/lib/matches';
 import { useTheme } from '@/lib/theme';
 
 function TabIcon({ name, color }: { name: SymbolViewProps['name']; color: ColorValue }) {
@@ -11,6 +13,9 @@ function TabIcon({ name, color }: { name: SymbolViewProps['name']; color: ColorV
 
 export default function TabLayout() {
   const { colors } = useTheme();
+  const { demoMode, session } = useAuth();
+  useChallengePolling(demoMode, session?.user.id);
+  const waiting = (useChallenges(demoMode) ?? []).filter(needsMe).length;
 
   return (
     <Tabs
@@ -40,7 +45,7 @@ export default function TabLayout() {
         name="challenges"
         options={{
           title: 'Challenges',
-          tabBarBadge: 3, // sample count until challenges are wired up
+          tabBarBadge: waiting || undefined,
           tabBarIcon: ({ color }) => <TabIcon name={{ ios: 'bolt.fill', android: 'bolt', web: 'bolt' }} color={color} />,
         }}
       />

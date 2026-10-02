@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Body, Button, Display, Field, Screen, Segmented } from '@/components/ui';
+import { signInWithGoogle } from '@/lib/google-auth';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
 
@@ -32,6 +33,18 @@ export default function SignInScreen() {
     else if (mode === 'reset') setMessage({ text: 'If that email has an account, a reset link is on its way.', error: false });
   };
 
+  const google = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      setMessage({ text: error instanceof Error ? error.message : 'Google sign-in failed.', error: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const label = { sign_in: 'Log in', sign_up: 'Create account', reset: 'Send reset link' }[mode];
 
   return (
@@ -42,6 +55,15 @@ export default function SignInScreen() {
         <Body tone="muted" style={{ textAlign: 'center' }}>
           Find a partner nearby. Challenge up. Take the crown.
         </Body>
+      </View>
+
+      <Button label="Continue with Google" variant="inverse" size="lg" onPress={google} disabled={busy} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+        <Body size={13} tone="muted">
+          or use email
+        </Body>
+        <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
       </View>
 
       <Segmented

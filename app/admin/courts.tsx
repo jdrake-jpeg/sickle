@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
 import { CourtMap } from '@/components/CourtMap';
-import { Body, Button, Card, Field, Heading, Screen } from '@/components/ui';
+import { Body, Button, Card, Field, Heading, ListRow, Screen, SectionHeader } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { courtMeta, fetchPendingCourts, openDirections, PendingCourt } from '@/lib/courts';
+import { courtMeta, fetchPendingCourts, findGoogleCourts, GoogleCourt, openDirections, PendingCourt, useCourts } from '@/lib/courts';
+import { getLocationIfAllowed, rexburg } from '@/lib/location';
 import { useProfile } from '@/lib/profile';
 import { supabase } from '@/lib/supabase';
 
@@ -13,12 +14,39 @@ export default function ReviewCourtsScreen() {
   const { demoMode } = useAuth();
   const { profile } = useProfile();
   const [pending, setPending] = useState<PendingCourt[] | null>(null);
+  const { courts, reload } = useCourts();
+  const [google, setGoogle] = useState<GoogleCourt[] | null>(null);
 
   const load = useCallback(() => {
     fetchPendingCourts(demoMode).then(setPending);
   }, [demoMode]);
 
   useEffect(load, [load]);
+
+  // Courts Google knows about near you that aren't on Sickle yet.
+  useEffect(() => {
+    if (demoMode || !courts || google) return;
+    getLocationIfAllowed()
+      .then((spot) => findGoogleCourts(spot ?? rexburg, courts))
+      .then(setGoogle);
+  }, [demoMode, courts, google]);
+
+  const addFromGoogle = async (g: GoogleCourt) => {
+    if (!supabase) return;
+    const { error } = await supabase.rpc('submit_court', {
+      p_name: g.name,
+      p_lat: g.lat,
+      p_lng: g.lng,
+      p_address: g.address,
+      p_google_place_id: g.place_id,
+    });
+    if (error) {
+      Alert.alert("Couldn't add it", error.message);
+      return;
+    }
+    setGoogle((list) => (list ?? []).filter((x) => x.place_id !== g.place_id));
+    reload();
+  };
 
   if (!profile?.is_admin) {
     return (
@@ -33,7 +61,8 @@ export default function ReviewCourtsScreen() {
   return (
     <Screen>
       <Body tone="muted">
-        Check each spot on the map before approving it. Approved courts show for everyone and can host ranked matches.
+        Check each spot on the map before approving it. Approved courts show for everyone and can host ranked matches. Courts you add
+        from Google go straight on the map.
       </Body>
       {pending && pending.length === 0 ? (
         <Card style={{ padding: 16 }}>
@@ -43,6 +72,34 @@ export default function ReviewCourtsScreen() {
       {(pending ?? []).map((court) => (
         <PendingCourtCard key={court.id} court={court} demoMode={demoMode} onDone={() => done(court.id)} />
       ))}
+
+      {!demoMode ? (
+        <View style={{ gap: 8 }}>
+          <SectionHeader title="From Google" detail="Not on Sickle yet" />
+          {google === null ? <Body tone="muted">Looking…</Body> : null}
+          {google && google.length === 0 ? (
+            <Card style={{ padding: 16 }}>
+              <Body tone="muted">
+                Nothing new from Google nearby. If you expected some, check that the find-courts function and its Google key are set
+                up (see the README).
+              </Body>
+            </Card>
+          ) : null}
+          {(google ?? []).map((g) => (
+            <ListRow
+              key={g.place_id}
+              title={g.name}
+              subtitle={g.address ?? undefined}
+              right={
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <Button label="Check" variant="ghost" size="sm" onPress={() => openDirections(g)} />
+                  <Button label="Add" size="sm" onPress={() => addFromGoogle(g)} />
+                </View>
+              }
+            />
+          ))}
+        </View>
+      ) : null}
     </Screen>
   );
 }

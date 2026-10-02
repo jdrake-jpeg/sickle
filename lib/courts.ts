@@ -98,3 +98,60 @@ export function openDirections(court: Pick<Court, 'lat' | 'lng' | 'name'>) {
       : `https://www.google.com/maps/search/?api=1&query=${court.lat},${court.lng}`;
   Linking.openURL(url);
 }
+
+// A court Google knows about. Not on Sickle until someone adds it.
+export type GoogleCourt = { place_id: string; name: string; address: string | null; lat: number; lng: number };
+
+function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const rad = Math.PI / 180;
+  const h =
+    Math.sin(((b.lat - a.lat) * rad) / 2) ** 2 +
+    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(((b.lng - a.lng) * rad) / 2) ** 2;
+  return 3958.8 * 2 * Math.asin(Math.sqrt(h));
+}
+
+// Pickleball courts Google knows about near a spot, minus ones already on
+// Sickle. Empty when the find-courts function isn't set up yet.
+export async function findGoogleCourts(near: { lat: number; lng: number }, listed: Court[]): Promise<GoogleCourt[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.functions.invoke('find-courts', { body: { lat: near.lat, lng: near.lng } });
+  if (error || !data?.courts) return [];
+  return (data.courts as GoogleCourt[]).filter((g) => !listed.some((c) => milesBetween(c, g) < 0.06));
+}
+
+// How a court is right now, from players who are there. Reports fade after
+// 6 hours (court_conditions in supabase/migrations).
+export type Condition = 'good' | 'wet' | 'windy' | 'icy' | 'crowded';
+export type ConditionReport = { condition: Condition; note: string | null; reporter_name: string; created_at: string };
+
+export const conditions: { value: Condition; label: string; emoji: string }[] = [
+  { value: 'good', label: 'Good to play', emoji: '☀️' },
+  { value: 'wet', label: 'Wet', emoji: '💧' },
+  { value: 'windy', label: 'Windy', emoji: '💨' },
+  { value: 'icy', label: 'Icy', emoji: '🧊' },
+  { value: 'crowded', label: 'Crowded', emoji: '👥' },
+];
+
+export const conditionInfo = (c: Condition) => conditions.find((x) => x.value === c) ?? conditions[0];
+
+export async function fetchCourtConditions(demoMode: boolean, courtId: string): Promise<ConditionReport[]> {
+  if (demoMode || !supabase) {
+    return courtId === 'porter'
+      ? [{ condition: 'windy', note: 'Gusty on the north courts', reporter_name: 'Jack Thompson', created_at: new Date(Date.now() - 40 * 60_000).toISOString() }]
+      : [];
+  }
+  const { data } = await supabase.rpc('court_conditions', { p_court: courtId });
+  return (data ?? []) as ConditionReport[];
+}
+
+export async function fetchLatestConditions(demoMode: boolean): Promise<Record<string, { condition: Condition; created_at: string }>> {
+  if (demoMode || !supabase) return { porter: { condition: 'windy', created_at: new Date(Date.now() - 40 * 60_000).toISOString() } };
+  const { data } = await supabase.rpc('latest_court_conditions');
+  return Object.fromEntries(((data ?? []) as { court_id: string; condition: Condition; created_at: string }[]).map((r) => [r.court_id, r]));
+}
+
+export async function reportCondition(demoMode: boolean, courtId: string, condition: Condition, note: string) {
+  if (demoMode || !supabase) return;
+  const { error } = await supabase.rpc('report_court_condition', { p_court: courtId, p_condition: condition, p_note: note.trim() || null });
+  if (error) throw new Error(error.message);
+}

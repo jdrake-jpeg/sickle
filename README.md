@@ -10,7 +10,9 @@ npm install
 npx expo start
 ```
 
-Scan the QR code with the Expo Go app on your phone. Until Supabase is
+Scan the QR code with the Expo Go app on your phone. If your phone can't reach
+your computer (school or public Wi-Fi often blocks it), use
+`npx expo start --tunnel` instead. Until Supabase is
 connected, every screen runs on sample data from `lib/sample-data.ts`.
 
 ## Connect Supabase
@@ -25,6 +27,25 @@ connected, every screen runs on sample data from `lib/sample-data.ts`.
    before launch.
 5. Restart `npx expo start`. The app now asks you to log in, then to pick a
    username.
+
+## Sign in with Google
+
+The sign-in screen has Continue with Google, which also signs new players up.
+To turn it on:
+
+1. In the Google Cloud console, go to APIs & Services > OAuth consent screen
+   (Google Auth Platform) and set it up as External, with the app name Sickle.
+2. Go to Credentials > Create credentials > OAuth client ID, type **Web
+   application**. Under Authorized redirect URIs add
+   `https://<your-project-ref>.supabase.co/auth/v1/callback`. Copy the client ID
+   and client secret.
+3. In Supabase, go to Authentication > Sign In / Providers > Google, turn it on,
+   and paste the client ID and secret.
+4. In Supabase, go to Authentication > URL Configuration and add these Redirect
+   URLs: `exp://**` (Expo Go) and `sickle://**` (real builds).
+
+Before shipping to the App Store, Apple requires Sign in with Apple next to any
+other social login.
 
 ## Location
 
@@ -55,6 +76,27 @@ nobody else can, and the last admin can't be removed. Other players never see
 these screens. (In demo mode, with no Supabase, you see them so you can look
 around.)
 
+### Finding courts with Google
+
+The map shows gray pins for pickleball courts Google knows about that aren't on
+Sickle yet. Anyone can tap one to submit it, and admins can add them straight
+to the map from Review courts. This runs through the `find-courts` edge
+function so the Google key never ships in the app. To turn it on:
+
+1. In the Google Cloud console, create a project, turn on billing, and enable
+   **Places API (New)**.
+2. Create an API key under APIs & Services > Credentials. Restrict it to
+   Places API (New).
+3. In Supabase, open Edge Functions > Secrets and add `GOOGLE_PLACES_API_KEY`
+   with that key.
+4. Deploy the function: Edge Functions > Deploy a new function > Via editor,
+   name it `find-courts`, paste `supabase/functions/find-courts/index.ts`, and
+   deploy. (Or `npx supabase functions deploy find-courts`.)
+
+Without it, everything else works; the gray pins just don't show.
+
+### Map tiles
+
 The map uses Apple Maps on iPhone and Google Maps on Android. Expo Go needs no
 map key. For an Android store build, create a Google Maps API key (Google Cloud
 console > APIs & Services, enable "Maps SDK for Android"), restrict it to
@@ -75,6 +117,11 @@ results directly; the app calls database functions:
 - `expire_unanswered_results`: results nobody answers for 72 hours become
   `unconfirmed`. Schedule it hourly with pg_cron.
 
+After a match is confirmed, the players can privately rate the level each
+other player really played at (`rate_player`, within 14 days). Only the rated
+player sees it (`my_ratings`, `my_rating_summary`, and the friend inbox in
+`friend_activity`). Ratings never change rankings.
+
 Only confirmed matches count in `team_records`, `player_records` and
 `court_leaderboard` (Elo per team per court; rank 1 holds the crown). Admin edits
 to a confirmed match are written to `match_audit_log`.
@@ -92,13 +139,15 @@ Built to the October first release in the plan doc: sign-up and login, profiles,
 Looking to Play with nearby players and search, unlimited two-person teams,
 challenges (accept or decline), best-of-3 scores both teams agree on, Rexburg
 courts with leaderboards and crowns, block and report, and four tabs (Play,
-Challenges, Courts, Profile). Also: a courts map and court sign-up with admin
-approval. Push notifications are next.
+Challenges, Courts, Profile). Also: a courts map, court sign-up with admin
+approval, courts found through Google, and friends (requests, a friends list,
+and everyone you've challenged or played), a private inbox per friend with your
+games and ratings, private player ratings after a match, court conditions
+(wet, windy, icy, crowded; reports fade after 6 hours), and a simple rules page.
+Push notifications are next.
 
-Wired to Supabase so far: sign-in, profile setup, Looking to Play and nearby
-players, player search, teaming up, block and report, the courts map and list,
-court leaderboards, court sign-up and review. Challenges, scores and the Profile
-tab still show sample data.
+Everything is wired to Supabase. Without `.env.local` the app runs in demo mode
+on sample data.
 
 ## Project layout
 

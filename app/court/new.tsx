@@ -1,22 +1,33 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
 import { CourtMap } from '@/components/CourtMap';
-import { Body, Button, Field, Screen, Segmented } from '@/components/ui';
+import { Body, Button, Chip, Field, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import { findGoogleCourts, GoogleCourt } from '@/lib/courts';
+import { useProfile } from '@/lib/profile';
 import { getCurrentLocation, LatLng } from '@/lib/location';
 import { supabase } from '@/lib/supabase';
 
 type Setting = 'outdoor' | 'indoor';
 
-// Anyone can submit a court. It goes on the map once an admin approves it.
+type Prefill = { name?: string; lat?: string; lng?: string; address?: string; placeId?: string };
+
+// Anyone can submit a court. It goes on the map once an admin approves it
+// (right away when an admin adds it). Opened from a gray Google pin, it starts
+// filled in with that court.
 export default function NewCourtScreen() {
+  const prefill = useLocalSearchParams<Prefill>();
+  const prefilledSpot = prefill.lat && prefill.lng ? { lat: Number(prefill.lat), lng: Number(prefill.lng) } : null;
   const { demoMode } = useAuth();
-  const [center, setCenter] = useState<LatLng | null>(null);
-  const [pin, setPin] = useState<LatLng | null>(null);
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
+  const { profile } = useProfile();
+  const [center, setCenter] = useState<LatLng | null>(prefilledSpot);
+  const [pin, setPin] = useState<LatLng | null>(prefilledSpot);
+  const [placeId, setPlaceId] = useState<string | null>(prefill.placeId || null);
+  const [nearby, setNearby] = useState<GoogleCourt[]>([]);
+  const [name, setName] = useState(prefill.name ?? '');
+  const [address, setAddress] = useState(prefill.address ?? '');
   const [count, setCount] = useState('');
   const [setting, setSetting] = useState<Setting>('outdoor');
   const [note, setNote] = useState('');
@@ -26,15 +37,42 @@ export default function NewCourtScreen() {
     try {
       const here = await getCurrentLocation();
       setCenter(here);
-      setPin(here);
+      movePin(here);
     } catch {
       // No location: they can still tap the map to drop the pin.
     }
   };
 
   useEffect(() => {
-    locateMe();
+    if (prefilledSpot) return;
+    (async () => {
+      try {
+        const here = await getCurrentLocation();
+        setCenter(here);
+        setPin(here);
+        if (!demoMode) setNearby((await findGoogleCourts(here, [])).slice(0, 6));
+      } catch {
+        // No location: they can still tap the map to drop the pin.
+      }
+    })();
+    // Runs once when the screen opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const pick = (g: GoogleCourt) => {
+    const spot = { lat: g.lat, lng: g.lng };
+    setCenter(spot);
+    setPin(spot);
+    setName(g.name);
+    setAddress(g.address ?? '');
+    setPlaceId(g.place_id);
+  };
+
+  // Moving the pin by hand means it's no longer that Google place.
+  const movePin = (spot: LatLng) => {
+    setPin(spot);
+    setPlaceId(null);
+  };
 
   const courtCount = count.trim() ? Number(count) : null;
   const countOk = courtCount === null || (Number.isInteger(courtCount) && courtCount >= 1 && courtCount <= 50);
@@ -56,20 +94,34 @@ export default function NewCourtScreen() {
       p_court_count: courtCount,
       p_indoor: setting === 'indoor',
       p_note: note.trim() || null,
+      p_google_place_id: placeId,
     });
     setBusy(false);
     if (error) {
       Alert.alert("Couldn't add the court", error.message);
       return;
     }
-    Alert.alert('Thanks!', "An admin will check it's a real court. It shows on the map once it's approved.");
+    if (profile?.is_admin) Alert.alert('Added', "It's on the map now.");
+    else Alert.alert('Thanks!', "An admin will check it's a real court. It shows on the map once it's approved.");
     router.back();
   };
 
   return (
     <Screen>
       <Body tone="muted">Put the pin right on the courts. Tap the map or drag the pin to move it.</Body>
-      <CourtMap height={300} center={center} pin={pin} onPinChange={setPin} showsUserLocation={Boolean(center)} />
+      {nearby.length > 0 ? (
+        <View style={{ gap: 8 }}>
+          <Body size={13} weight="semibold" tone="muted">
+            Is it one of these?
+          </Body>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {nearby.map((g) => (
+              <Chip key={g.place_id} label={g.name} selected={placeId === g.place_id} onPress={() => pick(g)} />
+            ))}
+          </View>
+        </View>
+      ) : null}
+      <CourtMap height={300} center={center} pin={pin} onPinChange={movePin} showsUserLocation={!prefilledSpot && Boolean(center)} />
       <Button label="Use my location" variant="outline" size="sm" onPress={locateMe} />
 
       <Field label="Court name" placeholder="Porter Park" value={name} onChangeText={setName} maxLength={60} />
@@ -104,7 +156,7 @@ export default function NewCourtScreen() {
         style={{ height: 88, paddingTop: 12 }}
       />
 
-      <Button label={busy ? 'Sending…' : 'Submit for review'} size="lg" disabled={busy || !ready} onPress={submit} />
+      <Button label={busy ? 'Sending…' : profile?.is_admin ? 'Add to the map' : 'Submit for review'} size="lg" disabled={busy || !ready} onPress={submit} />
     </Screen>
   );
 }

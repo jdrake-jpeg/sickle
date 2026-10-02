@@ -14,6 +14,9 @@ export type CourtMapProps = {
   center?: LatLng | null;
   height?: number;
   onCourtPress?: (id: string) => void;
+  // Courts Google knows about that aren't on Sickle yet, shown as gray pins.
+  suggestions?: MapCourt[];
+  onSuggestionPress?: (id: string) => void;
   // A pin the player places by tapping or dragging, used to submit a court.
   pin?: LatLng | null;
   onPinChange?: (pin: LatLng) => void;
@@ -29,6 +32,8 @@ export function CourtMap({
   center,
   height = 220,
   onCourtPress,
+  suggestions = [],
+  onSuggestionPress,
   pin,
   onPinChange,
   showsUserLocation = false,
@@ -68,6 +73,16 @@ export function CourtMap({
             description={court.subtitle}
             pinColor={brand.sickleRed}
             onCalloutPress={onCourtPress ? () => onCourtPress(court.id) : undefined}
+          />
+        ))}
+        {suggestions.map((court) => (
+          <Marker
+            key={`g-${court.id}`}
+            coordinate={{ latitude: court.lat, longitude: court.lng }}
+            title={court.name}
+            description={court.subtitle ?? 'Not on Sickle yet. Tap to add it.'}
+            pinColor="#8A8A8A"
+            onCalloutPress={onSuggestionPress ? () => onSuggestionPress(court.id) : undefined}
           />
         ))}
         {pin ? (

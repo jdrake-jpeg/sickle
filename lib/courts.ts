@@ -98,3 +98,23 @@ export function openDirections(court: Pick<Court, 'lat' | 'lng' | 'name'>) {
       : `https://www.google.com/maps/search/?api=1&query=${court.lat},${court.lng}`;
   Linking.openURL(url);
 }
+
+// A court Google knows about. Not on Sickle until someone adds it.
+export type GoogleCourt = { place_id: string; name: string; address: string | null; lat: number; lng: number };
+
+function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const rad = Math.PI / 180;
+  const h =
+    Math.sin(((b.lat - a.lat) * rad) / 2) ** 2 +
+    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(((b.lng - a.lng) * rad) / 2) ** 2;
+  return 3958.8 * 2 * Math.asin(Math.sqrt(h));
+}
+
+// Pickleball courts Google knows about near a spot, minus ones already on
+// Sickle. Empty when the find-courts function isn't set up yet.
+export async function findGoogleCourts(near: { lat: number; lng: number }, listed: Court[]): Promise<GoogleCourt[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.functions.invoke('find-courts', { body: { lat: near.lat, lng: near.lng } });
+  if (error || !data?.courts) return [];
+  return (data.courts as GoogleCourt[]).filter((g) => !listed.some((c) => milesBetween(c, g) < 0.06));
+}

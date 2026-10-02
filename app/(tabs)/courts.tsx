@@ -5,8 +5,8 @@ import { Pressable, View } from 'react-native';
 import { CourtMap } from '@/components/CourtMap';
 import { Body, Button, Card, Display, Heading, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { courtMeta, fetchLeaderboard, fetchMyTeamIds, fetchPendingCourts, useCourts } from '@/lib/courts';
-import { getLocationIfAllowed, LatLng } from '@/lib/location';
+import { courtMeta, fetchLeaderboard, fetchMyTeamIds, fetchPendingCourts, findGoogleCourts, GoogleCourt, useCourts } from '@/lib/courts';
+import { getLocationIfAllowed, LatLng, rexburg } from '@/lib/location';
 import { useProfile } from '@/lib/profile';
 import { courts as sampleCourts } from '@/lib/sample-data';
 import { useTheme } from '@/lib/theme';
@@ -21,11 +21,22 @@ export default function CourtsScreen() {
   const [standings, setStandings] = useState<Record<string, Standing>>({});
   const [pendingCount, setPendingCount] = useState(0);
   const [here, setHere] = useState<LatLng | null>(null);
+  const [located, setLocated] = useState(false);
+  const [suggestions, setSuggestions] = useState<GoogleCourt[]>([]);
   const isAdmin = Boolean(profile?.is_admin);
 
   useEffect(() => {
-    getLocationIfAllowed().then(setHere);
+    getLocationIfAllowed().then((spot) => {
+      setHere(spot);
+      setLocated(true);
+    });
   }, []);
+
+  // Courts Google knows about nearby that nobody has added yet.
+  useEffect(() => {
+    if (demoMode || !courts || !located) return;
+    findGoogleCourts(here ?? rexburg, courts).then(setSuggestions);
+  }, [demoMode, courts, located, here]);
 
   // Refresh when coming back from adding or reviewing a court.
   useFocusEffect(
@@ -76,12 +87,21 @@ export default function CourtsScreen() {
         </Link>
       </View>
 
-      {isAdmin && pendingCount > 0 ? (
+      {isAdmin ? (
         <Link href="/admin/courts" asChild>
           <Pressable accessibilityRole="link">
-            <Card style={{ padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderColor: colors.danger }}>
+            <Card
+              style={{
+                padding: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderColor: pendingCount > 0 ? colors.danger : colors.border,
+              }}>
               <Body weight="semibold">
-                {pendingCount} {pendingCount === 1 ? 'court is' : 'courts are'} waiting for review
+                {pendingCount > 0
+                  ? `${pendingCount} ${pendingCount === 1 ? 'court is' : 'courts are'} waiting for review`
+                  : 'Admin: review courts or add them from Google'}
               </Body>
               <Body weight="bold" tone="accent">
                 Review
@@ -97,7 +117,21 @@ export default function CourtsScreen() {
         showsUserLocation={Boolean(here)}
         courts={(courts ?? []).map((c) => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, subtitle: courtMeta(c) }))}
         onCourtPress={(id) => router.push(`/court/${id}`)}
+        suggestions={suggestions.map((g) => ({ id: g.place_id, name: g.name, lat: g.lat, lng: g.lng }))}
+        onSuggestionPress={(placeId) => {
+          const g = suggestions.find((x) => x.place_id === placeId);
+          if (!g) return;
+          router.push({
+            pathname: '/court/new',
+            params: { name: g.name, lat: String(g.lat), lng: String(g.lng), address: g.address ?? '', placeId: g.place_id },
+          });
+        }}
       />
+      {suggestions.length > 0 ? (
+        <Body size={13} tone="muted">
+          Gray pins are courts Google knows about that aren&apos;t on Sickle yet. Tap one to add it.
+        </Body>
+      ) : null}
       <Body tone="muted">Win at a court to climb its leaderboard and take the crown.</Body>
 
       {courts && courts.length === 0 ? (

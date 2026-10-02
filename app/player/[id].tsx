@@ -5,6 +5,7 @@ import { Alert, View } from 'react-native';
 import { Avatar, Body, Button, Card, Display, Field, Heading, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
+import { addFriend, fetchRelation, Relation, relationLabel, removeFriend } from '@/lib/friends';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 
@@ -23,6 +24,11 @@ export default function PlayerScreen() {
   const [reporting, setReporting] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [relation, setRelation] = useState<Relation>(null);
+
+  useEffect(() => {
+    fetchRelation(demoMode, id).then(setRelation);
+  }, [demoMode, id]);
 
   useEffect(() => {
     if (demoMode || !supabase) return;
@@ -76,6 +82,35 @@ export default function PlayerScreen() {
     setReason('');
   };
 
+  const friendAction = async () => {
+    try {
+      if (relation === 'friend' || relation === 'outgoing') {
+        await removeFriend(demoMode, player.id);
+        setRelation(null);
+      } else {
+        setRelation(await addFriend(demoMode, player.id, relation));
+      }
+    } catch (error) {
+      Alert.alert('Something went wrong', error instanceof Error ? error.message : 'Try again.');
+    }
+  };
+
+  const onFriendPress = () => {
+    if (relation === 'friend') {
+      Alert.alert(`Unfriend ${firstName}?`, undefined, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Unfriend', style: 'destructive', onPress: friendAction },
+      ]);
+    } else if (relation === 'outgoing') {
+      Alert.alert('Cancel your friend request?', undefined, [
+        { text: 'Keep it', style: 'cancel' },
+        { text: 'Cancel request', style: 'destructive', onPress: friendAction },
+      ]);
+    } else {
+      friendAction();
+    }
+  };
+
   const block = async () => {
     const ok = await run(() => supabase!.from('blocks').insert({ blocker_id: me, blocked_id: player.id }));
     if (ok) router.back();
@@ -92,6 +127,12 @@ export default function PlayerScreen() {
             .filter(Boolean)
             .join(' · ')}
         </Body>
+        <Button
+          label={relation === 'friend' ? 'Friends ✓' : relation === 'incoming' ? 'Accept friend request' : relationLabel(relation)}
+          variant={relation === 'incoming' || relation === null ? 'primary' : 'outline'}
+          size="sm"
+          onPress={onFriendPress}
+        />
       </View>
 
       <Card style={{ padding: 16, gap: 12 }}>

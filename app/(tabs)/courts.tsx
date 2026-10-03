@@ -17,7 +17,7 @@ type Standing = { teams: number; champs: { name: string; record: string } | null
 export default function CourtsScreen() {
   const { colors } = useTheme();
   const { demoMode, session } = useAuth();
-  const { profile } = useProfile();
+  const { isAdmin } = useProfile();
   const { courts, reload } = useCourts();
   const [standings, setStandings] = useState<Record<string, Standing>>({});
   const [pendingCount, setPendingCount] = useState(0);
@@ -25,7 +25,6 @@ export default function CourtsScreen() {
   const [located, setLocated] = useState(false);
   const [suggestions, setSuggestions] = useState<GoogleCourt[]>([]);
   const [latest, setLatest] = useState<Record<string, { condition: Condition; created_at: string }>>({});
-  const isAdmin = Boolean(profile?.is_admin);
 
   useEffect(() => {
     getLocationIfAllowed().then((spot) => {

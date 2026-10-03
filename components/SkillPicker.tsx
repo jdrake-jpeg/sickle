@@ -21,6 +21,13 @@ export function tierOf(skill: number) {
   return skill >= 5 ? 'Star' : skill >= 4 ? 'Pro' : skill >= 3 ? 'Intermediate' : 'Beginner';
 }
 
+// "3.5 Intermediate", so the number never shows up without its meaning.
+export function skillLabel(skill: number | string | null | undefined) {
+  if (skill === null || skill === undefined || skill === '') return null;
+  const n = Number(skill);
+  return `${n.toFixed(1)} ${tierOf(n)}`;
+}
+
 // The four groups players see, with a plain-words summary of each.
 const tiers = [
   { tier: 'Beginner', range: '2.0 to 2.5', summary: 'New to the game. Learning the rules, the serve and how to keep score.' },
@@ -32,7 +39,6 @@ const tiers = [
 export function SkillPicker({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
   const { colors } = useTheme();
   const selected = skillLevels.find((s) => s.value === value);
-  const [open, setOpen] = useState(false);
 
   return (
     <View style={{ gap: 10 }}>
@@ -63,50 +69,7 @@ export function SkillPicker({ value, onChange }: { value: number | null; onChang
         </Body>
       )}
 
-      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)}>
-        <Card style={{ padding: 14, gap: 10 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Heading size={13}>WHAT DO THE LEVELS MEAN?</Heading>
-            <Body weight="bold" tone="accent">
-              {open ? '▲' : '▼'}
-            </Body>
-          </View>
-          {open
-            ? tiers.map((t) => (
-                <View key={t.tier} style={{ gap: 4, borderTopWidth: 1, borderColor: colors.border, paddingTop: 10 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Body weight="bold">{t.tier.toUpperCase()}</Body>
-                    <Body size={14} tone="muted">
-                      {t.range}
-                    </Body>
-                  </View>
-                  <Body size={14}>{t.summary}</Body>
-                  {skillLevels
-                    .filter((l) => l.tier === t.tier)
-                    .map((l) => (
-                      <Body key={l.value} size={13} tone="muted">
-                        {l.value.toFixed(1)}: {l.description}
-                      </Body>
-                    ))}
-                </View>
-              ))
-            : tiers.map((t) => (
-                <View key={t.tier} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Body size={14} weight="semibold">
-                    {t.tier}
-                  </Body>
-                  <Body size={14} tone="muted">
-                    {t.range}
-                  </Body>
-                </View>
-              ))}
-          {!open ? (
-            <Body size={13} weight="semibold" tone="accent">
-              Tap to see what each level looks like
-            </Body>
-          ) : null}
-        </Card>
-      </Pressable>
+      <SkillGuide />
 
       <Pressable accessibilityRole="link" onPress={() => Linking.openURL('https://www.dupr.com')}>
         <Card style={{ padding: 14, gap: 4, borderColor: colors.accentText }}>
@@ -121,5 +84,59 @@ export function SkillPicker({ value, onChange }: { value: number | null; onChang
         </Card>
       </Pressable>
     </View>
+  );
+}
+
+// Tap-to-open guide to what the skill numbers mean. Used wherever ratings show
+// up, so nobody has to guess what a 3.5 is.
+export function SkillGuide({ title = 'WHAT DO THE LEVELS MEAN?', intro }: { title?: string; intro?: string }) {
+  const { colors } = useTheme();
+  const [open, setOpen] = useState(false);
+  return (
+    <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)}>
+      <Card style={{ padding: 14, gap: 10 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Heading size={13}>{title}</Heading>
+          <Body weight="bold" tone="accent">
+            {open ? '▲' : '▼'}
+          </Body>
+        </View>
+        {intro ? <Body size={14}>{intro}</Body> : null}
+        {open
+          ? tiers.map((t) => (
+              <View key={t.tier} style={{ gap: 4, borderTopWidth: 1, borderColor: colors.border, paddingTop: 10 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Body weight="bold">{t.tier.toUpperCase()}</Body>
+                  <Body size={14} tone="muted">
+                    {t.range}
+                  </Body>
+                </View>
+                <Body size={14}>{t.summary}</Body>
+                {skillLevels
+                  .filter((l) => l.tier === t.tier)
+                  .map((l) => (
+                    <Body key={l.value} size={13} tone="muted">
+                      {l.value.toFixed(1)}: {l.description}
+                    </Body>
+                  ))}
+              </View>
+            ))
+          : tiers.map((t) => (
+              <View key={t.tier} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Body size={14} weight="semibold">
+                  {t.tier}
+                </Body>
+                <Body size={14} tone="muted">
+                  {t.range}
+                </Body>
+              </View>
+            ))}
+        {!open ? (
+          <Body size={13} weight="semibold" tone="accent">
+            Tap to see what each level looks like
+          </Body>
+        ) : null}
+      </Card>
+    </Pressable>
   );
 }

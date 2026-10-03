@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, View } from 'react-native';
 
 import { LogoWordmark } from '@/components/Logo';
+import { SkillGuide, skillLabel } from '@/components/SkillPicker';
 import { Avatar, Body, Button, Card, Chip, Field, Heading, ListRow, Screen, SectionHeader, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { formatMiles, initialsOf } from '@/lib/format';
@@ -19,12 +20,18 @@ const durations: { value: Duration; label: string; until: string }[] = [
   { value: 'tonight', label: 'Tonight', until: 'until 11:59 PM' },
 ];
 
+// Same groups as the skill guide: Beginner 2.0 to 2.5, Intermediate 3.0 to
+// 3.5, Pro 4.0 to 4.5, Star 5.0 and up.
 const skillRanges: { label: string; min: number | null; max: number | null }[] = [
   { label: 'Any skill', min: null, max: null },
-  { label: '3.0 to 3.5', min: 3.0, max: 3.5 },
-  { label: '3.5 to 4.0', min: 3.5, max: 4.0 },
-  { label: '4.0+', min: 4.0, max: null },
+  { label: 'Beginner', min: null, max: 2.99 },
+  { label: 'Intermediate', min: 3.0, max: 3.99 },
+  { label: 'Pro', min: 4.0, max: 4.99 },
+  { label: 'Star', min: 5.0, max: null },
 ];
+
+const ratingIntro =
+  "The number next to a player is their skill rating, from 2.0 (brand new) to 5.5+ (pro level). Players pick their own, on the same scale as DUPR, the rating most pickleball players use. Tap to see what each level looks like.";
 const distances = [1, 3, 5];
 
 type Player = { id: string; name: string; username: string; skill: number | null; distance: string | null };
@@ -222,6 +229,8 @@ export default function PlayScreen() {
         </View>
       ) : null}
 
+      <SkillGuide title="WHAT DO THE RATINGS MEAN?" intro={ratingIntro} />
+
       <View style={{ gap: 10 }}>
         <SectionHeader title={searching ? 'Players' : 'Looking to play nearby'} detail={`${results.length} found`} />
         {results.length === 0 ? (
@@ -235,7 +244,7 @@ export default function PlayScreen() {
                 <ListRow
                   left={<Avatar initials={initialsOf(player.name)} />}
                   title={player.name}
-                  subtitle={[`@${player.username}`, player.skill?.toFixed(1), player.distance].filter(Boolean).join(' · ')}
+                  subtitle={[`@${player.username}`, skillLabel(player.skill), player.distance].filter(Boolean).join(' · ')}
                   right={<Body tone="accent" weight="bold" size={14}>Team up</Body>}
                 />
               </Pressable>

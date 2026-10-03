@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 import { useAuth } from '@/lib/auth';
+import { kv } from '@/lib/kv';
 import { me } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 
@@ -17,12 +18,35 @@ type ProfileState = {
   ready: boolean;
   profile: Profile | null;
   refresh: () => Promise<void>;
+  // True when the player is an admin AND has admin mode on. Use this to show
+  // admin tools, so admins can flip to the normal player view.
+  isAdmin: boolean;
+  // Admin mode on or off. Only matters for admins.
+  adminMode: boolean;
+  setAdminMode: (on: boolean) => void;
 };
 
 // In demo mode you're the sample player and an admin, so every screen shows.
 const demoProfile: Profile = { id: 'demo', username: me.username, display_name: me.name, skill_level: me.skill, is_admin: true };
 
-const ProfileContext = createContext<ProfileState>({ ready: false, profile: null, refresh: async () => {} });
+const adminModeKey = 'sickle.adminMode';
+
+function readAdminMode() {
+  try {
+    return kv.getItemSync(adminModeKey) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+const ProfileContext = createContext<ProfileState>({
+  ready: false,
+  profile: null,
+  refresh: async () => {},
+  isAdmin: false,
+  adminMode: true,
+  setAdminMode: () => {},
+});
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const { session, demoMode } = useAuth();
@@ -31,6 +55,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     ready: demoMode,
     profile: demoMode ? demoProfile : null,
   });
+
+  const [adminMode, setAdminModeState] = useState(readAdminMode);
+  const setAdminMode = useCallback((on: boolean) => {
+    setAdminModeState(on);
+    try {
+      kv.setItemSync(adminModeKey, on ? 'on' : 'off');
+    } catch {
+      // Not saved; it still applies until the app closes.
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!supabase || !userId) {
@@ -53,7 +87,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     refresh();
   }, [demoMode, refresh]);
 
-  return <ProfileContext.Provider value={{ ...state, refresh }}>{children}</ProfileContext.Provider>;
+  const isAdmin = Boolean(state.profile?.is_admin) && adminMode;
+  return <ProfileContext.Provider value={{ ...state, refresh, isAdmin, adminMode, setAdminMode }}>{children}</ProfileContext.Provider>;
 }
 
 export function useProfile() {

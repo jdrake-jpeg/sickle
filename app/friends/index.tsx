@@ -2,6 +2,7 @@ import { Link, useFocusEffect } from 'expo-router';
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
+import { skillLabel } from '@/components/SkillPicker';
 import { Avatar, Body, Button, Card, Field, ListRow, Screen, SectionHeader } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
@@ -158,7 +159,7 @@ export default function FriendsScreen() {
           </Card>
         ) : null}
         {accepted.map((p) =>
-          row(p, [`@${p.username}`, p.skill?.toFixed(1)].filter(Boolean).join(' · '), <Body size={14} weight="bold" tone="accent">Open</Body>, true),
+          row(p, [`@${p.username}`, skillLabel(p.skill)].filter(Boolean).join(' · '), <Body size={14} weight="bold" tone="accent">Open</Body>, true),
         )}
       </View>
 

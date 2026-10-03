@@ -223,3 +223,29 @@ export async function reportCondition(demoMode: boolean, courtId: string, condit
   const { error } = await supabase.rpc('report_court_condition', { p_court: courtId, p_condition: condition, p_note: note.trim() || null });
   if (error) throw new Error(error.message);
 }
+
+// Admin: fix a court's details. Leave a field undefined to keep it as it is.
+export type CourtEdit = { name?: string; address?: string; court_count?: number; indoor?: boolean; lat?: number; lng?: number };
+
+export async function adminUpdateCourt(demoMode: boolean, courtId: string, edit: CourtEdit) {
+  if (demoMode || !supabase) return;
+  const { error } = await supabase.rpc('admin_update_court', {
+    p_court: courtId,
+    p_name: edit.name ?? null,
+    p_address: edit.address ?? null,
+    p_court_count: edit.court_count ?? null,
+    p_indoor: edit.indoor ?? null,
+    p_lat: edit.lat ?? null,
+    p_lng: edit.lng ?? null,
+  });
+  if (error) throw error;
+}
+
+// Admin: take a court off Sickle. A court with challenges or matches is hidden
+// instead of deleted, so match history stays.
+export async function adminRemoveCourt(demoMode: boolean, courtId: string): Promise<'deleted' | 'hidden'> {
+  if (demoMode || !supabase) return 'deleted';
+  const { data, error } = await supabase.rpc('admin_remove_court', { p_court: courtId });
+  if (error) throw error;
+  return data as 'deleted' | 'hidden';
+}

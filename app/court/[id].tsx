@@ -2,6 +2,7 @@ import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
+import { CourtAdminPanel } from '@/components/CourtAdminPanel';
 import { CourtMap } from '@/components/CourtMap';
 import { LightsPicker, lightsText, LightsValue, saveLights } from '@/components/LightsPicker';
 import { Body, Button, Card, Chip, Display, Field, Heading, Screen, SectionHeader } from '@/components/ui';
@@ -21,6 +22,7 @@ import {
   reportCondition,
 } from '@/lib/courts';
 import { timeAgo } from '@/lib/matches';
+import { useProfile } from '@/lib/profile';
 import { courts as sampleCourts } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
@@ -31,6 +33,7 @@ export default function CourtScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
   const { demoMode, session } = useAuth();
+  const { isAdmin } = useProfile();
   const [court, setCourt] = useState<Court | null | undefined>(undefined);
   const [rows, setRows] = useState<Row[]>([]);
   const [reports, setReports] = useState<ConditionReport[]>([]);
@@ -222,6 +225,8 @@ export default function CourtScreen() {
           Only confirmed matches count. Beating a higher-rated team moves you up more.
         </Body>
       </View>
+
+      {isAdmin ? <CourtAdminPanel court={court} demoMode={demoMode} onSaved={setCourt} /> : null}
     </Screen>
   );
 }

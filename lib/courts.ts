@@ -121,8 +121,27 @@ export async function findGoogleCourts(near: { lat: number; lng: number }, liste
     const { data, error } = await supabase.functions.invoke('find-courts', { body: { lat: near.lat, lng: near.lng } });
     if (!error && data?.courts) found = data.courts as GoogleCourt[];
   }
+  found = found.filter(isPickleballCourt);
   if (found.length === 0) found = await findOsmCourts(near);
-  return found.filter((g) => !listed.some((c) => milesBetween(c, g) < 0.06));
+  const spots: GoogleCourt[] = [];
+  for (const g of found) {
+    // Skip ones already on Sickle, and merge pins within ~100 m into one.
+    if (listed.some((c) => milesBetween(c, g) < 0.06)) continue;
+    if (spots.some((s) => milesBetween(s, g) < 0.06)) continue;
+    spots.push(g);
+  }
+  return spots.sort((a, b) => milesBetween(near, a) - milesBetween(near, b)).slice(0, maxSuggestions);
+}
+
+// Keeps the map clean: only the closest few unlisted courts get a gray pin.
+const maxSuggestions = 8;
+
+// Google's "pickleball courts" search also returns paddle shops, gyms and
+// clubs. Only keep places with pickleball in the name that don't sound like a
+// store or a business.
+const notACourt = /\b(shop|store|outlet|supply|supplies|gear|apparel|sports? (goods|authority)|academy|lessons?|coach(ing)?|club ?house|restaurant|grill|bar)\b/i;
+function isPickleballCourt(g: GoogleCourt) {
+  return /pickle ?ball/i.test(g.name) && !notACourt.test(g.name);
 }
 
 type OsmElement = { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> };
@@ -155,7 +174,7 @@ export async function findOsmCourts(near: { lat: number; lng: number }): Promise
     }
     return spots
       .sort((a, b) => milesBetween(near, a) - milesBetween(near, b))
-      .slice(0, 40)
+      .slice(0, maxSuggestions)
       .map(({ place_id, name, address, lat, lng }) => ({ place_id, name, address, lat, lng }));
   } catch {
     return [];

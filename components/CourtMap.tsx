@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { MapStyleElement, Marker } from 'react-native-maps';
 
 import { brand, radius } from '@/constants/theme';
 import { LatLng, rexburg } from '@/lib/location';
@@ -24,6 +24,13 @@ export type CourtMapProps = {
   // Static previews can't be panned or zoomed.
   interactive?: boolean;
 };
+
+// Hides the map's own business, park and bus stop icons on Android so the
+// only pins are courts. iPhone does the same with showsPointsOfInterests.
+const quietMap: MapStyleElement[] = [
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+];
 
 // Apple Maps on iPhone and Google Maps on Android, through react-native-maps
 // (built into Expo Go). Store builds on Android need a Google Maps key; see the README.
@@ -59,6 +66,8 @@ export function CourtMap({
         initialRegion={{ latitude: start.lat, longitude: start.lng, latitudeDelta: delta, longitudeDelta: delta }}
         userInterfaceStyle={name}
         showsUserLocation={showsUserLocation}
+        showsPointsOfInterests={false}
+        customMapStyle={quietMap}
         scrollEnabled={interactive}
         zoomEnabled={interactive}
         rotateEnabled={false}

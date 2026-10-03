@@ -30,8 +30,7 @@ const skillRanges: { label: string; min: number | null; max: number | null }[] =
   { label: 'Star', min: 5.0, max: null },
 ];
 
-const ratingIntro =
-  "The number next to a player is their skill rating, from 2.0 (brand new) to 5.5+ (pro level). Players pick their own, on the same scale as DUPR, the rating most pickleball players use. Tap to see what each level looks like.";
+const ratingIntro = 'The number by a name is their skill level, from 2.0 (new) to 5.5+ (pro). Same scale as DUPR.';
 const distances = [1, 3, 5];
 
 type Player = { id: string; name: string; username: string; skill: number | null; distance: string | null };

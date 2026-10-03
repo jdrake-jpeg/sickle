@@ -87,54 +87,38 @@ export function SkillPicker({ value, onChange }: { value: number | null; onChang
   );
 }
 
-// Tap-to-open guide to what the skill numbers mean. Used wherever ratings show
-// up, so nobody has to guess what a 3.5 is.
+// Tap-to-open guide to what the skill numbers mean. Closed, it's one line.
 export function SkillGuide({ title = 'WHAT DO THE LEVELS MEAN?', intro }: { title?: string; intro?: string }) {
   const { colors } = useTheme();
   const [open, setOpen] = useState(false);
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)}>
-      <Card style={{ padding: 14, gap: 10 }}>
+      <Card style={{ paddingHorizontal: 14, paddingVertical: 12, gap: 10 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Heading size={13}>{title}</Heading>
           <Body weight="bold" tone="accent">
             {open ? '▲' : '▼'}
           </Body>
         </View>
-        {intro ? <Body size={14}>{intro}</Body> : null}
-        {open
-          ? tiers.map((t) => (
-              <View key={t.tier} style={{ gap: 4, borderTopWidth: 1, borderColor: colors.border, paddingTop: 10 }}>
+        {open ? (
+          <>
+            {intro ? (
+              <Body size={14} tone="muted">
+                {intro}
+              </Body>
+            ) : null}
+            {tiers.map((t) => (
+              <View key={t.tier} style={{ gap: 2, borderTopWidth: 1, borderColor: colors.border, paddingTop: 8 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Body weight="bold">{t.tier.toUpperCase()}</Body>
+                  <Body weight="bold">{t.tier}</Body>
                   <Body size={14} tone="muted">
                     {t.range}
                   </Body>
                 </View>
                 <Body size={14}>{t.summary}</Body>
-                {skillLevels
-                  .filter((l) => l.tier === t.tier)
-                  .map((l) => (
-                    <Body key={l.value} size={13} tone="muted">
-                      {l.value.toFixed(1)}: {l.description}
-                    </Body>
-                  ))}
-              </View>
-            ))
-          : tiers.map((t) => (
-              <View key={t.tier} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Body size={14} weight="semibold">
-                  {t.tier}
-                </Body>
-                <Body size={14} tone="muted">
-                  {t.range}
-                </Body>
               </View>
             ))}
-        {!open ? (
-          <Body size={13} weight="semibold" tone="accent">
-            Tap to see what each level looks like
-          </Body>
+          </>
         ) : null}
       </Card>
     </Pressable>

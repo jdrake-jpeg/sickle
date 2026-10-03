@@ -1,8 +1,9 @@
 import { Linking, View } from 'react-native';
 
 import { Body, Card, Heading, Screen } from '@/components/ui';
+import legal from '@/constants/legal.json';
 
-export const supportEmail = 'support@sicklepickle.app';
+export const supportEmail = legal.supportEmail;
 
 export type LegalSection = { title: string; points: string[] };
 

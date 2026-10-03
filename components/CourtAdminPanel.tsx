@@ -9,6 +9,16 @@ import { LatLng } from '@/lib/location';
 
 type Setting = 'outdoor' | 'indoor';
 
+// The edit and remove functions come from database update 20261006. Until
+// it's run in Supabase, say so instead of showing a raw database error.
+function problem(e: unknown) {
+  const err = e as { code?: string; message?: string } | null;
+  if (err?.code === 'PGRST202' || /could not find the function/i.test(err?.message ?? '')) {
+    return 'The database update for editing courts isn\'t in Supabase yet. Run the 20261006 file in the SQL Editor, then try again.';
+  }
+  return err?.message || 'Try again.';
+}
+
 // Shown on a court's page in admin mode: fix its details or take it off Sickle.
 export function CourtAdminPanel({ court, demoMode, onSaved }: { court: Court; demoMode: boolean; onSaved: (court: Court) => void }) {
   const [editing, setEditing] = useState(false);
@@ -55,7 +65,7 @@ export function CourtAdminPanel({ court, demoMode, onSaved }: { court: Court; de
       });
       setEditing(false);
     } catch (e) {
-      Alert.alert("Couldn't save that", e instanceof Error ? e.message : 'Try again.');
+      Alert.alert("Couldn't save that", problem(e));
     } finally {
       setBusy(false);
     }
@@ -79,7 +89,7 @@ export function CourtAdminPanel({ court, demoMode, onSaved }: { court: Court; de
             );
             router.back();
           } catch (e) {
-            Alert.alert("Couldn't remove it", e instanceof Error ? e.message : 'Try again.');
+            Alert.alert("Couldn't remove it", problem(e));
             setBusy(false);
           }
         },

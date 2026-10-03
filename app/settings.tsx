@@ -13,7 +13,7 @@ import { ThemePreference, useTheme } from '@/lib/theme';
 export default function SettingsScreen() {
   const { preference, setPreference } = useTheme();
   const { session, demoMode } = useAuth();
-  const { profile, refresh } = useProfile();
+  const { profile, refresh, adminMode, setAdminMode } = useProfile();
   const { colors } = useTheme();
   const [summary, setSummary] = useState<RatingSummary | null>(null);
   // null until loaded; undefined if the database doesn't have the setting yet.
@@ -128,12 +128,27 @@ export default function SettingsScreen() {
       {profile?.is_admin ? (
         <View style={{ gap: 8 }}>
           <Heading>ADMIN</Heading>
-          <Link href="/admin/courts" asChild>
-            <Button label="Review submitted courts" variant="outline" />
-          </Link>
-          <Link href="/admin/admins" asChild>
-            <Button label="Manage admins" variant="outline" />
-          </Link>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Body weight="semibold">Admin mode</Body>
+              <Body size={13} tone="muted">
+                {adminMode
+                  ? 'On. You see admin tools, like editing and removing courts.'
+                  : 'Off. You see Sickle the way players do. Turn it back on any time.'}
+              </Body>
+            </View>
+            <Switch accessibilityLabel="Admin mode" value={adminMode} onValueChange={setAdminMode} trackColor={{ true: colors.accentFill }} />
+          </View>
+          {adminMode ? (
+            <>
+              <Link href="/admin/courts" asChild>
+                <Button label="Review submitted courts" variant="outline" />
+              </Link>
+              <Link href="/admin/admins" asChild>
+                <Button label="Manage admins" variant="outline" />
+              </Link>
+            </>
+          ) : null}
         </View>
       ) : null}
       {session ? <Button label="Log out" variant="outline" onPress={() => supabase?.auth.signOut()} /> : null}

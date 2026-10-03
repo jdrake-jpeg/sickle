@@ -67,9 +67,16 @@ The last admin can't delete their account.
 
 ## Privacy policy and terms
 
-`app/privacy.tsx` and `app/terms.tsx` are open to everyone, signed in or not.
-The web build exports them as `/privacy` and `/terms`, which is the public link
-the store listings need.
+The text lives in `constants/legal.json`. The app shows it in `app/privacy.tsx`
+and `app/terms.tsx` (open to everyone, signed in or not), and
+`npm run build:site` turns the same text into the public website in `site/`:
+a home page, `/privacy` and `/terms`. After changing the text, run
+`npm run build:site` and commit `site/` too.
+
+`site/` is served by Cloudflare Pages at sicklepickle.app: Workers & Pages >
+Create > Pages > Connect to Git, pick this repo, leave the build command empty
+and set the build output directory to `site`. Then add `sicklepickle.app` under
+the project's Custom domains.
 
 ## Store builds
 

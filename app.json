@@ -8,13 +8,19 @@
     "scheme": "sickle",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
+      "bundleIdentifier": "app.sicklepickle",
+      "supportsTablet": false,
+      "usesAppleSignIn": true,
       "icon": {
         "light": "./assets/images/icon-light.png",
         "dark": "./assets/images/icon.png"
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
+      "package": "app.sicklepickle",
       "adaptiveIcon": {
         "backgroundColor": "#040404",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -45,7 +51,8 @@
         {
           "locationWhenInUsePermission": "Sickle uses your location to show you to players nearby and to place courts on the map. Other players only see a rough distance."
         }
-      ]
+      ],
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true

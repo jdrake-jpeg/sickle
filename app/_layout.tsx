@@ -114,6 +114,9 @@ function RootLayoutNav() {
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />
         </Stack.Protected>
+        {/* Open to everyone, signed in or not. */}
+        <Stack.Screen name="privacy" options={{ title: 'Privacy policy' }} />
+        <Stack.Screen name="terms" options={{ title: 'Terms of use' }} />
       </Stack>
     </ThemeProvider>
   );

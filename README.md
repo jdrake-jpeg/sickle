@@ -44,8 +44,41 @@ To turn it on:
 4. In Supabase, go to Authentication > URL Configuration and add these Redirect
    URLs: `exp://**` (Expo Go) and `sickle://**` (real builds).
 
-Before shipping to the App Store, Apple requires Sign in with Apple next to any
-other social login.
+## Sign in with Apple
+
+On iPhone the sign-in screen also shows Continue with Apple (Apple requires it
+next to Google). It only works in a real build (TestFlight or the App Store),
+not in Expo Go. To turn it on:
+
+1. In Supabase, go to Authentication > Sign In / Providers > Apple and turn it on.
+2. Under Client IDs, add the app's bundle ID: `app.sicklepickle`. Native sign-in
+   needs nothing else (the secret key fields are only for web sign-in).
+
+The bundle ID needs Sign in with Apple turned on in the Apple Developer portal;
+EAS Build does that for you when it sets up the app.
+
+## Delete my account
+
+Settings > Delete my account calls `delete_my_account`. It deletes the login and
+everything personal (location, friends, ratings, blocks, reports). Played
+matches stay so other teams' records don't change; the profile becomes a
+"Deleted player" placeholder nobody can find, friend, team up with or challenge.
+The last admin can't delete their account.
+
+## Privacy policy and terms
+
+`app/privacy.tsx` and `app/terms.tsx` are open to everyone, signed in or not.
+The web build exports them as `/privacy` and `/terms`, which is the public link
+the store listings need.
+
+## Store builds
+
+The app ID is `app.sicklepickle` on both iPhone and Android. It can't change
+after launch. Build settings are in `eas.json`. EAS builds don't see
+`.env.local`, so add `EXPO_PUBLIC_SUPABASE_URL` and
+`EXPO_PUBLIC_SUPABASE_ANON_KEY` as EAS environment variables (expo.dev > your
+project > Environment variables, for preview and production), or the build runs
+in demo mode.
 
 ## Location
 

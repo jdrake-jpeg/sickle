@@ -54,6 +54,29 @@ export default function SettingsScreen() {
     }
   };
 
+  const deleteAccount = () => {
+    Alert.alert(
+      'Delete your account?',
+      'This removes your login, profile, friends, ratings and location for good. Matches you already played stay on the other teams\' records as "Deleted player". You can\'t undo this.',
+      [
+        { text: 'Keep my account', style: 'cancel' },
+        {
+          text: 'Delete for good',
+          style: 'destructive',
+          onPress: async () => {
+            if (demoMode || !supabase) return;
+            const { error } = await supabase.rpc('delete_my_account');
+            if (error) {
+              Alert.alert("Couldn't delete your account", error.message);
+              return;
+            }
+            await supabase.auth.signOut({ scope: 'local' });
+          },
+        },
+      ],
+    );
+  };
+
   const suggested = summary && summary.ratings > 0 && summary.average != null ? Number(summary.average) : null;
 
   return (
@@ -151,7 +174,17 @@ export default function SettingsScreen() {
           ) : null}
         </View>
       ) : null}
+      <View style={{ gap: 8 }}>
+        <Heading>ABOUT</Heading>
+        <Link href="/privacy" asChild>
+          <Button label="Privacy policy" variant="outline" />
+        </Link>
+        <Link href="/terms" asChild>
+          <Button label="Terms of use" variant="outline" />
+        </Link>
+      </View>
       {session ? <Button label="Log out" variant="outline" onPress={() => supabase?.auth.signOut()} /> : null}
+      {session ? <Button label="Delete my account" variant="dangerOutline" onPress={deleteAccount} /> : null}
     </Screen>
   );
 }

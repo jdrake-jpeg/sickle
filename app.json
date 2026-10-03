@@ -56,6 +56,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "drakehanna",
+    "extra": {
+      "eas": {
+        "projectId": "968aec2b-7309-401f-99d7-64a63cd92858"
+      }
     }
   }
 }

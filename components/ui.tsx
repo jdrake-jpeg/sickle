@@ -1,5 +1,7 @@
 import { ReactNode } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleProp,
@@ -62,7 +64,21 @@ export function Screen({ children, scroll = true }: { children: ReactNode; scrol
   const content = <View style={styles.screenContent}>{children}</View>;
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
-      {scroll ? <ScrollView contentContainerStyle={{ paddingBottom: space.xxl }}>{content}</ScrollView> : content}
+      {scroll ? (
+        // Keeps the box you're typing in above the keyboard. iPhone scrolls it
+        // into view; Android shrinks the screen above the keyboard.
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" enabled={Platform.OS === 'android'}>
+          <ScrollView
+            contentContainerStyle={{ paddingBottom: space.xxl }}
+            automaticallyAdjustKeyboardInsets
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive">
+            {content}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
+        content
+      )}
     </SafeAreaView>
   );
 }

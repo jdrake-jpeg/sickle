@@ -46,7 +46,7 @@ const sections: { title: string; points: string[] }[] = [
       'Games go to 11, and you have to win by 2.',
       'Call the score before every serve as three numbers: your score, their score, then server 1 or 2. Like "4, 2, 1".',
       'The game starts at "0, 0, 2", so the first team only gets one server.',
-      'A Sickle match is best of 3 games.',
+      'A Sickle match is one game or best of 3 games. The team that sends the challenge picks.',
     ],
   },
   {

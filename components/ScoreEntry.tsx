@@ -13,13 +13,15 @@ export function toGameScores(draft: DraftScores): GameScore[] {
     .map(([a, b]) => [Number(a), Number(b)] as GameScore);
 }
 
-export function fromGameScores(games: GameScore[]): DraftScores {
+// Turns saved games back into score boxes, with empty rows up to `rows`
+// (3 for best of 3, 1 for a one game match).
+export function fromGameScores(games: GameScore[], rows = 3): DraftScores {
   const draft: DraftScores = games.map(([a, b]) => [String(a), String(b)]);
-  while (draft.length < 3) draft.push(['', '']);
+  while (draft.length < rows) draft.push(['', '']);
   return draft;
 }
 
-// Three rows of score boxes: team A on the left, team B on the right.
+// One row of score boxes per game: team A on the left, team B on the right.
 export function ScoreEntry({
   teamA,
   teamB,

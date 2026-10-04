@@ -1,8 +1,13 @@
-// Client-side copy of the database's best-of-3 rules
-// (best_of_three_winner in supabase/migrations), so players see mistakes
-// before submitting. The database stays the authority.
+// Client-side copy of the database's match rules (best_of_three_winner and
+// match_winner in supabase/migrations), so players see mistakes before
+// submitting. The database stays the authority.
 
 export type GameScore = [number, number];
+
+// A challenge is one game or best of 3. The challenger picks.
+export type BestOf = 1 | 3;
+
+export const matchLengthLabel = (bestOf: BestOf) => (bestOf === 1 ? 'One game' : 'Best of 3');
 
 export function isValidGameScore(a: number, b: number) {
   const high = Math.max(a, b);
@@ -32,6 +37,18 @@ export function checkBestOfThree(games: GameScore[]): ScoreCheck {
   }
   if (winsA < 2 && winsB < 2) return { ok: false, error: 'Nobody has won two games yet. Add game 3.' };
   return { ok: true, winner: winsA === 2 ? 'a' : 'b' };
+}
+
+// Checks a score list against the match length. A one game match takes
+// exactly one game; best of 3 works as it always has.
+export function checkMatch(games: GameScore[], bestOf: BestOf): ScoreCheck {
+  if (bestOf === 3) return checkBestOfThree(games);
+  if (games.length !== 1) return { ok: false, error: 'Enter the score of the one game.' };
+  const [a, b] = games[0];
+  if (!Number.isInteger(a) || !Number.isInteger(b) || !isValidGameScore(a, b)) {
+    return { ok: false, error: 'Games go to 11, win by 2.' };
+  }
+  return { ok: true, winner: a > b ? 'a' : 'b' };
 }
 
 export function formatScores(games: GameScore[]) {

@@ -8,6 +8,7 @@ import { courtsNear, useCourts } from '@/lib/courts';
 import { formatMiles } from '@/lib/format';
 import { getLocationIfAllowed, LatLng } from '@/lib/location';
 import { fetchMyTeams, sendChallenge, TeamRow } from '@/lib/matches';
+import { BestOf, matchLengthLabel } from '@/lib/scores';
 
 const times = [
   { label: '7 AM', hour: 7 },
@@ -41,6 +42,7 @@ export default function NewChallengeScreen() {
   const [courtId, setCourtId] = useState<string | null>(court ?? null);
   const [day, setDay] = useState(0);
   const [hour, setHour] = useState<number | null>(null);
+  const [bestOf, setBestOf] = useState<BestOf>(3);
   const [busy, setBusy] = useState(false);
   const days = nextDays();
   const [here, setHere] = useState<LatLng | null>(null);
@@ -70,7 +72,7 @@ export default function NewChallengeScreen() {
     if (!ready) return;
     setBusy(true);
     try {
-      await sendChallenge(demoMode, myTeam, team, courtId, when);
+      await sendChallenge(demoMode, myTeam, team, courtId, when, bestOf);
       Alert.alert('Challenge sent', `${teamName || 'They'} can accept or decline. You'll see it under Challenges.`);
       router.back();
     } catch (e) {
@@ -97,7 +99,19 @@ export default function NewChallengeScreen() {
   return (
     <Screen>
       <Heading size={22}>CHALLENGE {(teamName || 'this team').toUpperCase()}</Heading>
-      <Body tone="muted">Ranked, best of 3. It counts once both teams agree on the score.</Body>
+      <Body tone="muted">Ranked. It counts once both teams agree on the score.</Body>
+
+      <View style={{ gap: 8 }}>
+        <Body weight="semibold">Match length</Body>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {([1, 3] as BestOf[]).map((n) => (
+            <Chip key={n} label={matchLengthLabel(n)} selected={bestOf === n} onPress={() => setBestOf(n)} />
+          ))}
+        </View>
+        <Body size={13} tone="muted">
+          {bestOf === 1 ? 'One game to 11, win by 2. Quick, and the winner is whoever takes that game.' : 'First team to win 2 games, each to 11 and win by 2.'}
+        </Body>
+      </View>
 
       <View style={{ gap: 8 }}>
         <Body weight="semibold">Your team</Body>

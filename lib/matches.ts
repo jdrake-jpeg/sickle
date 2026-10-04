@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
-import { GameScore } from '@/lib/scores';
+import { BestOf, GameScore } from '@/lib/scores';
 import { supabase } from '@/lib/supabase';
 
 // Challenges, matches, teams and private ratings. Every write goes through a
@@ -30,7 +30,12 @@ export type ChallengeRow = {
   games: GameScore[] | null;
   submitted_by_name: string | null;
   played_at: string | null;
+  // One game or best of 3. Missing on a database from before update 20261010,
+  // which only had best of 3.
+  best_of?: BestOf;
 };
+
+export const bestOfOf = (row: Pick<ChallengeRow, 'best_of'>): BestOf => (row.best_of === 1 ? 1 : 3);
 
 export type TeamRow = { team_id: string; team_name: string; partner_id?: string; partner_name?: string; wins: number; losses: number };
 
@@ -155,7 +160,7 @@ const toDbOrder = (row: ChallengeRow, mine: GameScore[]) =>
 export async function submitScore(demoMode: boolean, row: ChallengeRow, mine: GameScore[]) {
   if (demoMode || !supabase) {
     const wins = mine.filter(([a, b]) => a > b).length;
-    return demoUpdate(row.challenge_id, { match_id: 'demo-' + row.challenge_id, match_status: 'awaiting_confirmation', games: mine, i_won: wins >= 2, submitted_by_name: 'Drake', played_at: new Date().toISOString() });
+    return demoUpdate(row.challenge_id, { match_id: 'demo-' + row.challenge_id, match_status: 'awaiting_confirmation', games: mine, i_won: wins * 2 > mine.length, submitted_by_name: 'Drake', played_at: new Date().toISOString() });
   }
   await call('submit_match_result', { p_challenge: row.challenge_id, p_games: toDbOrder(row, mine) });
 }
@@ -168,15 +173,22 @@ export async function confirmResult(demoMode: boolean, row: ChallengeRow) {
 // Returns the new match status: back to them, or to an admin.
 export async function disputeResult(demoMode: boolean, row: ChallengeRow, mine: GameScore[], note: string): Promise<MatchStatus> {
   if (demoMode || !supabase) {
-    demoUpdate(row.challenge_id, { games: mine, awaiting_me: false, i_won: mine.filter(([a, b]) => a > b).length >= 2 });
+    demoUpdate(row.challenge_id, { games: mine, awaiting_me: false, i_won: mine.filter(([a, b]) => a > b).length * 2 > mine.length });
     return 'awaiting_confirmation';
   }
   return (await call('dispute_match_result', { p_match: row.match_id, p_games: toDbOrder(row, mine), p_note: note.trim() || null })) as MatchStatus;
 }
 
-export async function sendChallenge(demoMode: boolean, myTeam: string, theirTeam: string, court: string, when: Date) {
+export async function sendChallenge(demoMode: boolean, myTeam: string, theirTeam: string, court: string, when: Date, bestOf: BestOf = 3) {
   if (demoMode || !supabase) return;
-  await call('send_challenge', { p_my_team: myTeam, p_their_team: theirTeam, p_court: court, p_time: when.toISOString() });
+  await call('send_challenge', {
+    p_my_team: myTeam,
+    p_their_team: theirTeam,
+    p_court: court,
+    p_time: when.toISOString(),
+    // Only sent for one game, so best of 3 challenges also work before update 20261010 is in the database.
+    ...(bestOf === 1 ? { p_best_of: 1 } : {}),
+  });
 }
 
 // ---------------------------------------------------------------------------

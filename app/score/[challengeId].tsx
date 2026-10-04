@@ -5,8 +5,8 @@ import { Alert, View } from 'react-native';
 import { DraftScores, ScoreEntry, toGameScores } from '@/components/ScoreEntry';
 import { Body, Button, Card, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { formatWhen, submitScore, useChallenges } from '@/lib/matches';
-import { checkBestOfThree } from '@/lib/scores';
+import { bestOfOf, formatWhen, submitScore, useChallenges } from '@/lib/matches';
+import { checkMatch, matchLengthLabel } from '@/lib/scores';
 
 // Enter the score for an accepted challenge. It goes to the other team to
 // confirm (submit_match_result in supabase/migrations).
@@ -15,6 +15,8 @@ export default function EnterScoreScreen() {
   const { demoMode } = useAuth();
   const rows = useChallenges(demoMode);
   const challenge = rows?.find((c) => c.challenge_id === challengeId);
+  const bestOf = challenge ? bestOfOf(challenge) : 3;
+  // Room for three games; a one game match only shows the first.
   const [draft, setDraft] = useState<DraftScores>([
     ['', ''],
     ['', ''],
@@ -33,8 +35,8 @@ export default function EnterScoreScreen() {
   }
 
   const submit = async () => {
-    const games = toGameScores(draft);
-    const check = checkBestOfThree(games);
+    const games = toGameScores(draft.slice(0, bestOf));
+    const check = checkMatch(games, bestOf);
     if (!check.ok) {
       setError(check.error);
       return;
@@ -56,11 +58,16 @@ export default function EnterScoreScreen() {
     <Screen>
       <Card style={{ padding: 14 }}>
         <Body size={14} tone="subtle">
-          {challenge.my_team_name} vs {challenge.their_team_name} at {challenge.court_name}, {formatWhen(challenge.proposed_time)}. Games go to 11, win by 2. It
-          counts once the other team confirms.
+          {challenge.my_team_name} vs {challenge.their_team_name} at {challenge.court_name}, {formatWhen(challenge.proposed_time)}.{' '}
+          {matchLengthLabel(bestOf)}. Games go to 11, win by 2. It counts once the other team confirms.
         </Body>
       </Card>
-      <ScoreEntry teamA={challenge.my_team_name} teamB={challenge.their_team_name} value={draft} onChange={setDraft} />
+      <ScoreEntry
+        teamA={challenge.my_team_name}
+        teamB={challenge.their_team_name}
+        value={draft.slice(0, bestOf)}
+        onChange={(next) => setDraft([...next, ...draft.slice(next.length)])}
+      />
       {error ? (
         <Body tone="danger" weight="semibold">
           {error}

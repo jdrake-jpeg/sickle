@@ -6,6 +6,7 @@ import { SickleSlice } from '@/components/SickleSlice';
 import { Body, Button, Card, Display, Heading, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import {
+  bestOfOf,
   cancelChallenge,
   ChallengeRow,
   formatWhen,
@@ -14,7 +15,7 @@ import {
   respondToChallenge,
   useChallenges,
 } from '@/lib/matches';
-import { formatScores } from '@/lib/scores';
+import { formatScores, matchLengthLabel } from '@/lib/scores';
 import { useTheme } from '@/lib/theme';
 
 type Tab = 'incoming' | 'sent' | 'upcoming' | 'played';
@@ -138,7 +139,7 @@ export default function ChallengesScreen() {
                   </Heading>
                 </View>
                 <Body size={14} tone="subtle">
-                  {r.court_name} · {formatWhen(r.proposed_time)} · Ranked, best of 3
+                  {r.court_name} · {formatWhen(r.proposed_time)} · Ranked, {matchLengthLabel(bestOfOf(r)).toLowerCase()}
                 </Body>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <Button

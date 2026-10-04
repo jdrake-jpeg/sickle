@@ -3,11 +3,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, View } from 'react-native';
 
 import { LogoWordmark } from '@/components/Logo';
+import { PlayPrefs } from '@/components/PlayPrefs';
 import { SkillGuide, skillLabel } from '@/components/SkillPicker';
 import { Avatar, Body, Button, Card, Chip, Field, Heading, ListRow, Screen, SectionHeader, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { formatMiles, initialsOf } from '@/lib/format';
 import { getCurrentLocation, getLocationIfAllowed, LatLng, LocationError } from '@/lib/location';
+import { formatTags } from '@/lib/play';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
@@ -33,7 +35,8 @@ const skillRanges: { label: string; min: number | null; max: number | null }[] =
 const ratingIntro = 'The number by a name is their skill level, from 2.0 (new) to 5.5+ (pro). Same scale as DUPR.';
 const distances = [1, 3, 5];
 
-type Player = { id: string; name: string; username: string; skill: number | null; distance: string | null };
+type Format = 'any' | 'singles' | 'doubles';
+type Player = { id: string; name: string; username: string; skill: number | null; distance: string | null; plays_singles?: boolean; plays_doubles?: boolean };
 
 function endTime(duration: Duration) {
   const now = new Date();
@@ -65,6 +68,8 @@ export default function PlayScreen() {
   const [duration, setDuration] = useState<Duration>('2h');
   const [skill, setSkill] = useState(skillRanges[0].label);
   const [distance, setDistance] = useState(3);
+  const [format, setFormat] = useState<Format>('any');
+  const [showPrefs, setShowPrefs] = useState(false);
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState<LatLng | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -89,23 +94,30 @@ export default function PlayScreen() {
   const loadNearby = useCallback(async () => {
     if (!supabase || !location) return;
     const range = skillRanges.find((s) => s.label === skill)!;
-    const { data } = await supabase.rpc('nearby_players', {
+    const args = {
       p_lat: location.lat,
       p_lng: location.lng,
       p_radius_miles: distance,
       p_min_skill: range.min,
       p_max_skill: range.max,
-    });
+    };
+    let res = await supabase.rpc('nearby_players', format === 'any' ? args : { ...args, p_format: format });
+    // The format filter needs the newest database update; fall back to no filter.
+    if (res.error && format !== 'any') res = await supabase.rpc('nearby_players', args);
     setPlayers(
-      (data ?? []).map((p: { profile_id: string; display_name: string; username: string; skill_level: number | null; distance_miles: number }) => ({
-        id: p.profile_id,
-        name: p.display_name,
-        username: p.username,
-        skill: p.skill_level,
-        distance: formatMiles(p.distance_miles),
-      })),
+      (res.data ?? []).map(
+        (p: { profile_id: string; display_name: string; username: string; skill_level: number | null; distance_miles: number; plays_singles?: boolean; plays_doubles?: boolean }) => ({
+          id: p.profile_id,
+          name: p.display_name,
+          username: p.username,
+          skill: p.skill_level,
+          distance: formatMiles(p.distance_miles),
+          plays_singles: p.plays_singles,
+          plays_doubles: p.plays_doubles,
+        }),
+      ),
     );
-  }, [location, skill, distance]);
+  }, [location, skill, distance, format]);
 
   useEffect(() => {
     if (!demoMode && !searching) loadNearby();
@@ -203,6 +215,21 @@ export default function PlayScreen() {
         <Segmented accent value={duration} onChange={setDuration} options={durations.map(({ value, label }) => ({ value, label }))} />
       </Card>
 
+      <Card style={{ padding: 16, gap: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}>
+            <Heading size={14} style={{ letterSpacing: 1 }}>
+              WHAT YOU&apos;RE OPEN TO
+            </Heading>
+            <Body size={13} tone="muted">
+              Singles, doubles, and who can challenge you
+            </Body>
+          </View>
+          <Button label={showPrefs ? 'Done' : 'Change'} variant="outline" size="sm" onPress={() => setShowPrefs(!showPrefs)} />
+        </View>
+        {showPrefs ? <PlayPrefs /> : null}
+      </Card>
+
       <Field
         label="Find a player"
         placeholder="Search by username"
@@ -218,6 +245,11 @@ export default function PlayScreen() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {skillRanges.map((s) => (
               <Chip key={s.label} label={s.label} selected={s.label === skill} onPress={() => setSkill(s.label)} />
+            ))}
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {(['any', 'singles', 'doubles'] as Format[]).map((f) => (
+              <Chip key={f} label={f === 'any' ? 'Singles or doubles' : f === 'singles' ? 'Singles' : 'Doubles'} selected={f === format} onPress={() => setFormat(f)} />
             ))}
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -243,7 +275,7 @@ export default function PlayScreen() {
                 <ListRow
                   left={<Avatar initials={initialsOf(player.name)} />}
                   title={player.name}
-                  subtitle={[`@${player.username}`, skillLabel(player.skill), player.distance].filter(Boolean).join(' · ')}
+                  subtitle={[`@${player.username}`, skillLabel(player.skill), player.distance, formatTags(player)].filter(Boolean).join(' · ')}
                   right={<Body tone="accent" weight="bold" size={14}>Team up</Body>}
                 />
               </Pressable>

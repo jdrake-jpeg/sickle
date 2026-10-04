@@ -1,6 +1,6 @@
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 
 import { CourtAdminPanel } from '@/components/CourtAdminPanel';
 import { CourtMap } from '@/components/CourtMap';
@@ -23,12 +23,13 @@ import {
   reportCondition,
 } from '@/lib/courts';
 import { timeAgo } from '@/lib/matches';
+import { championWins } from '@/lib/play';
 import { useProfile } from '@/lib/profile';
 import { courts as sampleCourts } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
 
-type Row = { rank: number; teamId: string; name: string; rating: number; record: string; mine: boolean };
+type Row = { rank: number; teamId: string; name: string; rating: number; record: string; wins: number; mine: boolean };
 
 export default function CourtScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -84,7 +85,7 @@ export default function CourtScreen() {
           ? { id: sample.id, name: sample.name, lat: sample.lat, lng: sample.lng, address: null, indoor: sample.meta.startsWith('Indoor'), court_count: Number(sample.meta.match(/(\d+) courts/)?.[1]) || null, has_lights: sample.id === 'porter', lights_until: sample.id === 'porter' ? 22 : null }
           : null,
       );
-      setRows((sample?.leaderboard ?? []).map((r) => ({ ...r, teamId: `${id}-${r.rank}`, mine: Boolean(r.mine) })));
+      setRows((sample?.leaderboard ?? []).map((r) => ({ ...r, teamId: `${id}-${r.rank}`, wins: Number(String(r.record).split('–')[0]) || 0, mine: Boolean(r.mine) })));
       return;
     }
     (async () => {
@@ -93,7 +94,7 @@ export default function CourtScreen() {
       if (!data) return;
       const [board, mine] = await Promise.all([fetchLeaderboard(id, format === 'singles'), fetchMyTeamIds(session?.user.id)]);
       setRows(
-        board.map((r) => ({ rank: r.rank, teamId: r.team_id, name: r.team_name, rating: r.rating, record: `${r.wins}–${r.losses}`, mine: mine.has(r.team_id) })),
+        board.map((r) => ({ rank: r.rank, teamId: r.team_id, name: r.team_name, rating: r.rating, record: `${r.wins}–${r.losses}`, wins: r.wins, mine: mine.has(r.team_id) })),
       );
     })();
   }, [demoMode, id, session?.user.id, format]);
@@ -107,7 +108,9 @@ export default function CourtScreen() {
     );
   }
 
-  const champs = rows[0];
+  const lead = rows[0];
+  // The crown needs the #1 spot and at least 6 wins here.
+  const champs = lead && lead.wins >= championWins ? lead : undefined;
   const latest = reports[0];
 
   return (
@@ -189,18 +192,31 @@ export default function CourtScreen() {
       </Card>
 
       {champs ? (
-        <View style={{ backgroundColor: colors.accentFill, borderRadius: 18, padding: 16, gap: 2 }}>
-          <Heading size={12} tone="onAccent" style={{ letterSpacing: 1 }}>
-            {format === 'singles' ? 'SINGLES COURT CHAMP' : 'COURT CHAMPS'}
+        <Link href={{ pathname: '/team/[id]', params: { id: champs.teamId } }} asChild>
+          <Pressable accessibilityRole="link" style={{ backgroundColor: colors.accentFill, borderRadius: 18, padding: 16, gap: 2 }}>
+            <Heading size={12} tone="onAccent" style={{ letterSpacing: 1 }}>
+              {format === 'singles' ? '👑 SINGLES COURT CHAMP' : '👑 COURT CHAMPS'}
+            </Heading>
+            <Heading size={22} tone="onAccent">
+              {champs.name}
+            </Heading>
+            <Body size={13} weight="medium" tone="onAccent">
+              {champs.record} at {court.name}
+            </Body>
+          </Pressable>
+        </Link>
+      ) : (
+        <Card style={{ padding: 16, gap: 4 }}>
+          <Heading size={12} style={{ letterSpacing: 1 }}>
+            {format === 'singles' ? 'NO SINGLES CHAMP YET' : 'NO COURT CHAMP YET'}
           </Heading>
-          <Heading size={22} tone="onAccent">
-            {champs.name}
-          </Heading>
-          <Body size={13} weight="medium" tone="onAccent">
-            {champs.record} at {court.name}
+          <Body size={13} tone="muted">
+            {lead
+              ? `${lead.name} leads with ${lead.wins} ${lead.wins === 1 ? 'win' : 'wins'}. Finish #1 with ${championWins} wins at ${court.name} to take the crown.`
+              : `Finish #1 with ${championWins} wins at ${court.name} to take the crown.`}
           </Body>
-        </View>
-      ) : null}
+        </Card>
+      )}
 
       <View style={{ gap: 6 }}>
         <SectionHeader title="Leaderboard" />
@@ -222,15 +238,19 @@ export default function CourtScreen() {
           </Card>
         ) : null}
         {rows.map((row) => (
+          <Link key={row.teamId} href={{ pathname: '/team/[id]', params: { id: row.teamId } }} asChild>
+            <Pressable accessibilityRole="link">
           <Card
-            key={row.teamId}
             highlighted={row.mine}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, minHeight: 52 }}>
             <Body style={{ fontFamily: fonts.numeric, width: 20 }} tone={row.mine ? 'accent' : 'default'}>
               {row.rank}
             </Body>
             <View style={{ flex: 1 }}>
-              <Body weight={row.mine ? 'bold' : 'semibold'}>{row.name}</Body>
+              <Body weight={row.mine ? 'bold' : 'semibold'}>
+                {champs && row.teamId === champs.teamId ? '👑 ' : ''}
+                {row.name}
+              </Body>
               <Body size={12} tone="muted">
                 {row.record} · {row.rating}
               </Body>
@@ -241,9 +261,11 @@ export default function CourtScreen() {
               </Link>
             ) : null}
           </Card>
+            </Pressable>
+          </Link>
         ))}
         <Body size={12} tone="muted">
-          Only confirmed matches count. Beating a higher-rated team moves you up more.
+          Tap a team to see its wins. Only confirmed matches count. Beating a higher-rated team moves you up more.
         </Body>
       </View>
 

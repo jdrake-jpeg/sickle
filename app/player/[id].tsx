@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { addFriend, fetchRelation, Relation, relationLabel, removeFriend } from '@/lib/friends';
 import { fetchMyTeams, fetchPlayerHistory, fetchPlayerTeams, HistoryRow, TeamRow } from '@/lib/matches';
+import { Crown, crownText, fetchPlayerCrowns, fetchPlayerOpen, formatTags, PlayerOpen } from '@/lib/play';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 
@@ -31,6 +32,8 @@ export default function PlayerScreen() {
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [teamsVersion, setTeamsVersion] = useState(0);
   const [history, setHistory] = useState<HistoryRow[] | null>(null);
+  const [open, setOpen] = useState<PlayerOpen | null>(null);
+  const [crowns, setCrowns] = useState<Crown[]>([]);
   const [stats, setStats] = useState<{ wins: number | null; losses: number | null; hidden: boolean } | null>(null);
 
   // Their record, unless they've hidden it in Settings.
@@ -52,6 +55,8 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     fetchPlayerHistory(demoMode, id).then(setHistory);
+    fetchPlayerOpen(demoMode, id).then(setOpen);
+    fetchPlayerCrowns(demoMode, id).then(setCrowns);
   }, [demoMode, id]);
 
   useEffect(() => {
@@ -150,13 +155,32 @@ export default function PlayerScreen() {
       <Stack.Screen options={{ title: `@${player.username}` }} />
       <View style={{ alignItems: 'center', gap: 8, paddingTop: 8 }}>
         <Avatar initials={initialsOf(player.name)} size={88} />
-        <Display size={26}>{player.name.toUpperCase()}</Display>
+        <Pressable
+          accessibilityRole={crowns.length ? 'button' : undefined}
+          disabled={crowns.length === 0}
+          onPress={() => Alert.alert(`${player.name} is a Court Champ`, crowns.map(crownText).join('\n'))}>
+          <Display size={26} style={{ textAlign: 'center' }}>
+            {crowns.length ? '👑 ' : ''}
+            {player.name.toUpperCase()}
+          </Display>
+        </Pressable>
+        {crowns.length ? (
+          <Body size={13} tone="muted">
+            Court Champ at {crowns.map((c) => c.court_name).join(', ')}
+          </Body>
+        ) : null}
         <Body tone="muted">
           {[`@${player.username}`, player.skill ? `${Number(player.skill).toFixed(1)} ${tierOf(Number(player.skill))}` : null, distance ? `${distance} away` : null]
             .filter(Boolean)
             .join(' · ')}
         </Body>
+        {open ? (
+          <Body size={13} tone="muted">
+            {[formatTags(open), !open.can_friend && relation === null ? `Not taking friend requests` : null].filter(Boolean).join(' · ')}
+          </Body>
+        ) : null}
         <Button
+          disabled={Boolean(open && !open.can_friend && relation === null)}
           label={relation === 'friend' ? 'Friends ✓' : relation === 'incoming' ? 'Accept friend request' : relationLabel(relation)}
           variant={relation === 'incoming' || relation === null ? 'primary' : 'outline'}
           size="sm"
@@ -190,6 +214,11 @@ export default function PlayerScreen() {
       {teams.length > 0 ? (
         <View style={{ gap: 8 }}>
           <SectionHeader title={`${firstName}'s teams`} detail="Tap one to see its wins" />
+          {open && !open.can_challenge ? (
+            <Body size={13} tone="muted">
+              {open.challenge_note ?? `${firstName} isn't taking challenges right now`}
+            </Body>
+          ) : null}
           {teams.map((t) => (
             <Link key={t.team_id} href={{ pathname: '/team/[id]', params: { id: t.team_id } }} asChild>
               <Pressable accessibilityRole="link">
@@ -198,7 +227,7 @@ export default function PlayerScreen() {
                   subtitle={`${t.wins}–${t.losses} · tap for history`}
                   right={
                     <Link href={{ pathname: '/challenge/new', params: { team: t.team_id, teamName: t.is_singles ? player.name : t.team_name } }} asChild>
-                      <Button label="Challenge" variant="dangerOutline" size="sm" />
+                      <Button label="Challenge" variant="dangerOutline" size="sm" disabled={Boolean(open && !open.can_challenge)} />
                     </Link>
                   }
                 />

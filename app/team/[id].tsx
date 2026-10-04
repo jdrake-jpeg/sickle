@@ -6,6 +6,7 @@ import { HistoryList } from '@/components/HistoryList';
 import { Avatar, Body, Button, Card, Display, Field, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
+import { Crown, crownText, fetchTeamCrowns } from '@/lib/play';
 import { deleteTeam, fetchTeamDetail, fetchTeamHistory, HistoryRow, renameTeam, TeamDetail } from '@/lib/matches';
 
 // One team: record, who is on it, every confirmed match (where, against
@@ -15,6 +16,7 @@ export default function TeamScreen() {
   const { demoMode } = useAuth();
   const [team, setTeam] = useState<TeamDetail | null | undefined>(undefined);
   const [history, setHistory] = useState<HistoryRow[] | null>(null);
+  const [crowns, setCrowns] = useState<Crown[]>([]);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -25,6 +27,7 @@ export default function TeamScreen() {
       if (t) setName(t.custom_name ?? '');
     });
     fetchTeamHistory(demoMode, id).then(setHistory);
+    fetchTeamCrowns(demoMode, id).then(setCrowns);
   }, [demoMode, id]);
 
   useFocusEffect(load);
@@ -81,6 +84,21 @@ export default function TeamScreen() {
     <Screen>
       <Stack.Screen options={{ title: 'Team' }} />
       <Display size={26}>{(team.is_singles ? `${team.team_name} · SINGLES` : team.team_name).toUpperCase()}</Display>
+
+      {crowns.length > 0 ? (
+        <Card style={{ padding: 14, gap: 4 }} highlighted>
+          <Body weight="bold">👑 Court Champs</Body>
+          {crowns.map((c) => (
+            <Link key={`${c.court_id}-${c.is_singles}`} href={{ pathname: '/court/[id]', params: { id: c.court_id } }} asChild>
+              <Pressable accessibilityRole="link">
+                <Body size={14} tone="accent" weight="semibold">
+                  {crownText(c)}
+                </Body>
+              </Pressable>
+            </Link>
+          ))}
+        </Card>
+      ) : null}
 
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Stat value={`${team.wins}–${team.losses}`} label="Record" />

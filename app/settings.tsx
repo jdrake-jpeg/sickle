@@ -2,6 +2,7 @@ import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Switch, View } from 'react-native';
 
+import { PlayPrefs } from '@/components/PlayPrefs';
 import { skillLevels, tierOf } from '@/components/SkillPicker';
 import { Body, Button, Card, Chip, Heading, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
@@ -121,6 +122,11 @@ export default function SettingsScreen() {
             After a few ranked matches, Sickle suggests a level here from what other players rate you.
           </Body>
         )}
+      </View>
+
+      <View style={{ gap: 8 }}>
+        <Heading>PLAYING</Heading>
+        <PlayPrefs />
       </View>
 
       <View style={{ gap: 8 }}>

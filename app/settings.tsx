@@ -191,7 +191,7 @@ export default function SettingsScreen() {
       ) : null}
       <View style={{ gap: 8 }}>
         <Heading>ABOUT</Heading>
-        <Link href="/welcome" asChild>
+        <Link href="/help" asChild>
           <Button label="How Sickle works" variant="outline" />
         </Link>
         <Link href="/privacy" asChild>

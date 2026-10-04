@@ -1,6 +1,7 @@
 import { Link } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
+import { ShowMore, usePaged } from '@/components/ShowMore';
 import { Body, Card } from '@/components/ui';
 import { formatWhen, HistoryRow } from '@/lib/matches';
 import { formatScores } from '@/lib/scores';
@@ -11,6 +12,7 @@ import { useTheme } from '@/lib/theme';
 // teamed up with.
 export function HistoryList({ rows, empty }: { rows: HistoryRow[] | null; empty: string }) {
   const { colors } = useTheme();
+  const paged = usePaged(rows ?? [], 5);
   if (rows === null) return <Body tone="muted">Loading…</Body>;
   if (rows.length === 0) {
     return (
@@ -21,7 +23,7 @@ export function HistoryList({ rows, empty }: { rows: HistoryRow[] | null; empty:
   }
   return (
     <View style={{ gap: 8 }}>
-      {rows.map((r) => (
+      {paged.shown.map((r) => (
         <Card key={r.challenge_id} style={{ padding: 14, gap: 6 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View
@@ -57,6 +59,7 @@ export function HistoryList({ rows, empty }: { rows: HistoryRow[] | null; empty:
           </Link>
         </Card>
       ))}
+      <ShowMore hasMore={paged.hasMore} remaining={paged.remaining} onPress={paged.more} />
     </View>
   );
 }

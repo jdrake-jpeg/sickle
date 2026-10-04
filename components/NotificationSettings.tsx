@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Switch, View } from 'react-native';
 
-import { Body, Button, Card, Heading, InfoDrop } from '@/components/ui';
+import { Body, Button, Card, Heading } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { Category, categories, disablePush, enablePush, PushStatus, pushStatus } from '@/lib/notifications';
 import { useProfile } from '@/lib/profile';
@@ -133,9 +133,6 @@ export function NotificationSettings() {
         </View>
       ))}
 
-      <InfoDrop title="How do notifications work?">
-        Sickle sends one alert when something happens, like a new challenge or a friend request. Every alert is also saved in your Alerts list in the app, so you never miss one. Court condition alerts only come for courts you play at or have challenged at, and at most one per court a day. Turn off a kind here and you stop getting it.
-      </InfoDrop>
     </View>
   );
 }

@@ -69,8 +69,6 @@ export function SkillPicker({ value, onChange }: { value: number | null; onChang
         </Body>
       )}
 
-      <SkillGuide />
-
       <Pressable accessibilityRole="link" onPress={() => Linking.openURL('https://www.dupr.com')}>
         <Card style={{ padding: 14, gap: 4, borderColor: colors.accentText }}>
           <Heading size={13}>GET YOUR DUPR RATING</Heading>

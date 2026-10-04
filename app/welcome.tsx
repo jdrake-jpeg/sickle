@@ -1,7 +1,7 @@
-import { router } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { View } from 'react-native';
 
-import { Body, Button, Card, Display, Heading, InfoDrop, Screen } from '@/components/ui';
+import { Body, Button, Card, Display, Heading, Screen } from '@/components/ui';
 
 const steps: { title: string; body: string }[] = [
   {
@@ -10,7 +10,7 @@ const steps: { title: string; body: string }[] = [
   },
   {
     title: 'Challenge someone',
-    body: 'Tap a player from Play or search their username. On their profile pick singles or doubles and one game or best of 3, then pick a court and time. They can accept or decline.',
+    body: 'Tap a player on Play or Find people. On their profile pick singles or doubles and one game or best of 3, then pick a court and time. They can accept or decline.',
   },
   {
     title: 'Play, then enter the score',
@@ -18,7 +18,7 @@ const steps: { title: string; body: string }[] = [
   },
   {
     title: 'Add friends, then make a team',
-    body: 'Doubles is team against team. A team is you and a friend, and you can only team up with people who are your friends. Add a friend from the Friends tab, then make a team from your Profile.',
+    body: 'Doubles is team against team. A team is you and a friend, and you can only team up with people who are your friends. Add a friend from the Find people tab, then make a team from Teams on your Profile.',
   },
   {
     title: 'Courts have leaderboards',
@@ -50,12 +50,9 @@ export default function WelcomeScreen() {
         </Card>
       ))}
 
-      <InfoDrop title="What do the skill levels mean?">
-        From 2.0 (just starting) up to 5.5 and higher (pro). It is the same scale as DUPR. Pick the one that feels right. After a few ranked games, other players can privately rate you and Sickle suggests a level.
-      </InfoDrop>
-      <InfoDrop title="Look for the little arrows">
-        Anywhere you see a small arrow with a question, tap it for a quick explanation of what that part of Sickle is for.
-      </InfoDrop>
+      <Link href="/help" asChild>
+        <Button label="Read the full guide" variant="outline" />
+      </Link>
 
       <Button label="Got it, let's play" size="lg" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
     </Screen>

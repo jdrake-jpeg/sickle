@@ -56,26 +56,33 @@ export default function TeamScreen() {
     }
   };
 
+  const doDelete = async () => {
+    setBusy(true);
+    try {
+      await deleteTeam(demoMode, team.team_id);
+      router.back();
+    } catch (e) {
+      Alert.alert("Couldn't delete it", e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Two steps, so nobody deletes a team by accident.
   const remove = () =>
     Alert.alert(
       `Delete ${team.team_name}?`,
-      'It disappears from your teams and its pending challenges are cancelled. Past matches stay in everyone\'s history. You can make the same team again later.',
+      `This takes ${team.team_name} off every leaderboard and out of your teams, and cancels any waiting challenges. Its ranking and record are lost. You can't undo it from the app.`,
       [
         { text: 'Keep it', style: 'cancel' },
         {
-          text: 'Delete team',
+          text: 'Continue',
           style: 'destructive',
-          onPress: async () => {
-            setBusy(true);
-            try {
-              await deleteTeam(demoMode, team.team_id);
-              router.back();
-            } catch (e) {
-              Alert.alert("Couldn't delete it", e instanceof Error ? e.message : 'Try again.');
-            } finally {
-              setBusy(false);
-            }
-          },
+          onPress: () =>
+            Alert.alert('Are you sure?', `Delete ${team.team_name} for good? Its place on the leaderboards and its saved record will be gone.`, [
+              { text: 'No, keep it', style: 'cancel' },
+              { text: `Yes, delete ${team.team_name}`, style: 'destructive', onPress: doDelete },
+            ]),
         },
       ],
     );

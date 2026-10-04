@@ -5,7 +5,7 @@ import { Alert, Pressable, View } from 'react-native';
 import { ChallengeBuilder } from '@/components/ChallengeBuilder';
 import { HistoryList } from '@/components/HistoryList';
 import { tierOf } from '@/components/SkillPicker';
-import { Avatar, Body, Button, Card, Display, Field, Heading, InfoDrop, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
+import { Avatar, Body, Button, Card, Display, Field, Heading, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { addFriend, fetchRelation, Relation, relationLabel, removeFriend } from '@/lib/friends';
@@ -256,9 +256,9 @@ export default function PlayerScreen() {
           <Button label="Create team" variant="outline" disabled={busy} onPress={createTeam} />
         </Card>
       ) : (
-        <InfoDrop title={`Want to team up with ${firstName}?`}>
+        <Body size={13} tone="muted">
           Teams are only with friends. Add {firstName} as a friend first. Once they accept, you can make a doubles team here.
-        </InfoDrop>
+        </Body>
       )}
 
       {reporting ? (

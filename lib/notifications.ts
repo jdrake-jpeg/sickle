@@ -98,7 +98,7 @@ function openFromData(data: unknown) {
   if (typeof path !== 'string') return;
   if (path === '/challenges') router.navigate('/challenges');
   else if (path === '/profile') router.navigate('/profile');
-  else if (path === '/friends') router.navigate('/friends');
+  else if (path === '/friends') router.push('/my-friends');
   else if (path.startsWith('/court/')) router.push({ pathname: '/court/[id]', params: { id: path.slice('/court/'.length) } });
   else router.push('/notifications');
 }

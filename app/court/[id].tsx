@@ -23,6 +23,7 @@ import {
   removePrivateCourt,
   reportCondition,
 } from '@/lib/courts';
+import { ShowMore, usePaged } from '@/components/ShowMore';
 import { timeAgo, useTeamPlayers } from '@/lib/matches';
 import { championWins } from '@/lib/play';
 import { useProfile } from '@/lib/profile';
@@ -39,7 +40,8 @@ export default function CourtScreen() {
   const { isAdmin } = useProfile();
   const [court, setCourt] = useState<Court | null | undefined>(undefined);
   const [rows, setRows] = useState<Row[]>([]);
-  const teamPlayers = useTeamPlayers(demoMode, rows.map((r) => ({ team_id: r.teamId })));
+  const pagedRows = usePaged(rows, 10);
+  const teamPlayers = useTeamPlayers(demoMode, pagedRows.shown.map((r) => ({ team_id: r.teamId })));
   const [format, setFormat] = useState<'doubles' | 'singles'>('doubles');
   const [reports, setReports] = useState<ConditionReport[]>([]);
   const [picked, setPicked] = useState<Condition | null>(null);
@@ -273,7 +275,7 @@ export default function CourtScreen() {
             </Body>
           </Card>
         ) : null}
-        {rows.map((row) => (
+        {pagedRows.shown.map((row) => (
           <Link key={row.teamId} href={{ pathname: '/team/[id]', params: { id: row.teamId } }} asChild>
             <Pressable accessibilityRole="link">
           <Card
@@ -305,6 +307,7 @@ export default function CourtScreen() {
             </Pressable>
           </Link>
         ))}
+        <ShowMore hasMore={pagedRows.hasMore} remaining={pagedRows.remaining} onPress={pagedRows.more} />
         <Body size={12} tone="muted">
           Tap a team to see its wins. Only confirmed matches count. Beating a higher-rated team moves you up more.
         </Body>

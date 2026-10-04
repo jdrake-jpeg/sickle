@@ -1,4 +1,4 @@
-import { Link, Stack, useLocalSearchParams } from 'expo-router';
+import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
@@ -20,6 +20,7 @@ import {
   fetchLeaderboard,
   fetchMyTeamIds,
   openDirections,
+  removePrivateCourt,
   reportCondition,
 } from '@/lib/courts';
 import { timeAgo } from '@/lib/matches';
@@ -125,6 +126,40 @@ export default function CourtScreen() {
 
       <CourtMap height={160} interactive={false} center={court} courts={[{ id: court.id, name: court.name, lat: court.lat, lng: court.lng }]} />
       <Button label="Directions" variant="outline" size="sm" onPress={() => openDirections(court)} />
+
+      {court.is_private ? (
+        <Card style={{ padding: 14, gap: 8 }}>
+          <Body weight="semibold">🔒 Private court</Body>
+          <Body size={13} tone="muted">
+            Only the player who saved it and their friends can see it, and only they can play ranked games here. It has no crown.
+          </Body>
+          {court.submitted_by === session?.user.id ? (
+            <Button
+              label="Remove this court"
+              variant="dangerOutline"
+              size="sm"
+              style={{ alignSelf: 'flex-start' }}
+              onPress={() =>
+                Alert.alert('Remove this private court?', 'Games already played here stay in everyone’s history.', [
+                  { text: 'Keep it', style: 'cancel' },
+                  {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await removePrivateCourt(demoMode, court.id);
+                        router.back();
+                      } catch (e) {
+                        Alert.alert("Couldn't remove it", e instanceof Error ? e.message : 'Try again.');
+                      }
+                    },
+                  },
+                ])
+              }
+            />
+          ) : null}
+        </Card>
+      ) : null}
 
       {court.admin_note ? (
         <Card style={{ padding: 16, gap: 6 }}>
@@ -269,7 +304,7 @@ export default function CourtScreen() {
         </Body>
       </View>
 
-      {isAdmin ? <CourtAdminPanel court={court} demoMode={demoMode} onSaved={setCourt} /> : null}
+      {isAdmin && !court.is_private ? <CourtAdminPanel court={court} demoMode={demoMode} onSaved={setCourt} /> : null}
     </Screen>
   );
 }

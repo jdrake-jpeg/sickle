@@ -4,7 +4,7 @@ import { Alert, View } from 'react-native';
 
 import { Body, Button, Card, Chip, Heading, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { courtsNear, useCourts } from '@/lib/courts';
+import { courtsNear, nearbyMiles, useCourts } from '@/lib/courts';
 import { formatMiles } from '@/lib/format';
 import { getLocationIfAllowed, LatLng } from '@/lib/location';
 import { fetchMyTeams, fetchTeamDetail, sendChallenge, TeamRow } from '@/lib/matches';
@@ -48,7 +48,11 @@ export default function NewChallengeScreen() {
   const [busy, setBusy] = useState(false);
   const days = nextDays();
   const [here, setHere] = useState<LatLng | null>(null);
-  const sorted = courtsNear(here, courts ?? []);
+  const allSorted = courtsNear(here, courts ?? []);
+  const [moreCourts, setMoreCourts] = useState(false);
+  // Nearby courts first. The one you came from is always in the list.
+  const nearList = allSorted.filter((c) => c.miles === null || c.miles <= nearbyMiles || c.id === court);
+  const sorted = moreCourts ? allSorted : nearList.slice(0, 8);
 
   useEffect(() => {
     getLocationIfAllowed().then(setHere);
@@ -154,6 +158,14 @@ export default function NewChallengeScreen() {
               onPress={() => setCourtId(c.id)}
             />
           ))}
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+          {!moreCourts && allSorted.length > sorted.length ? (
+            <Button label="Show more courts" variant="ghost" size="sm" onPress={() => setMoreCourts(true)} />
+          ) : null}
+          <Link href="/court/new" asChild>
+            <Button label="Court not listed? Add it" variant="ghost" size="sm" />
+          </Link>
         </View>
       </View>
 

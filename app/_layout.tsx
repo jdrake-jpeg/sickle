@@ -96,6 +96,7 @@ function RootLayoutNav() {
           <Stack.Screen name="score/[challengeId]" options={{ title: 'Enter score' }} />
           <Stack.Screen name="court/[id]" options={{ title: 'Court' }} />
           <Stack.Screen name="court/new" options={{ title: 'Add a court' }} />
+          <Stack.Screen name="court/map" options={{ title: 'Courts map' }} />
           <Stack.Screen name="friends/[id]" options={{ title: 'Games and ratings' }} />
           <Stack.Screen name="chat/[id]" options={{ title: 'Chat' }} />
           <Stack.Screen name="challenge/new" options={{ title: 'Send a challenge' }} />

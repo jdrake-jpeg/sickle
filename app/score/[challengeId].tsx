@@ -1,10 +1,13 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { Link, router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
 import { DraftScores, ScoreEntry, toGameScores } from '@/components/ScoreEntry';
-import { Body, Button, Card, Screen } from '@/components/ui';
+import { Body, Button, Card, Chip, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import { Court, courtsNear, useCourts } from '@/lib/courts';
+import { formatMiles } from '@/lib/format';
+import { getLocationIfAllowed, LatLng } from '@/lib/location';
 import { bestOfOf, formatWhen, submitScore, useChallenges } from '@/lib/matches';
 import { checkMatch, matchLengthLabel } from '@/lib/scores';
 
@@ -24,6 +27,13 @@ export default function EnterScoreScreen() {
   ]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Where it was played. Starts as the planned court; change it if you played somewhere else.
+  const [courtId, setCourtId] = useState<string | null>(null);
+  const { courts } = useCourts();
+  const [here, setHere] = useState<LatLng | null>(null);
+  useEffect(() => {
+    getLocationIfAllowed().then(setHere);
+  }, []);
 
   if (!rows) return <Screen>{null}</Screen>;
   if (!challenge || challenge.status !== 'accepted' || challenge.match_id) {
@@ -33,6 +43,14 @@ export default function EnterScoreScreen() {
       </Screen>
     );
   }
+
+  // The planned court plus the closest few others.
+  const playedAt: (Court & { miles: number | null })[] = (() => {
+    const sorted = courtsNear(here, courts ?? []);
+    const planned = sorted.find((c) => c.id === challenge.court_id);
+    const others = sorted.filter((c) => c.id !== challenge.court_id).slice(0, 7);
+    return planned ? [planned, ...others] : others;
+  })();
 
   const submit = async () => {
     const games = toGameScores(draft.slice(0, bestOf));
@@ -44,7 +62,8 @@ export default function EnterScoreScreen() {
     setError(null);
     setBusy(true);
     try {
-      await submitScore(demoMode, challenge, games);
+      const picked = (courts ?? []).find((c) => c.id === courtId);
+      await submitScore(demoMode, challenge, games, courtId ?? undefined, picked?.name);
       Alert.alert('Score sent', `${challenge.their_team_name} will be asked to confirm it.`);
       router.back();
     } catch (e) {
@@ -68,6 +87,27 @@ export default function EnterScoreScreen() {
         value={draft.slice(0, bestOf)}
         onChange={(next) => setDraft([...next, ...draft.slice(next.length)])}
       />
+      <View style={{ gap: 8 }}>
+        <Body weight="semibold">Where did you play?</Body>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {playedAt.map((c) => (
+            <Chip
+              key={c.id}
+              label={c.id === challenge.court_id ? `${c.name} (planned)` : c.miles !== null ? `${c.name} · ${formatMiles(Math.round(c.miles * 10) / 10)}` : c.name}
+              selected={(courtId ?? challenge.court_id) === c.id}
+              onPress={() => setCourtId(c.id)}
+            />
+          ))}
+        </View>
+        <Body size={13} tone="muted">
+          Played somewhere else than planned? Pick that court. The other team sees it when they confirm.{' '}
+          <Link href="/court/new">
+            <Body size={13} tone="accent" weight="semibold">
+              Court not listed? Add it.
+            </Body>
+          </Link>
+        </Body>
+      </View>
       {error ? (
         <Body tone="danger" weight="semibold">
           {error}

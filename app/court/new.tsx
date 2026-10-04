@@ -6,13 +6,14 @@ import { CourtMap } from '@/components/CourtMap';
 import { LightsPicker, LightsValue, saveLights } from '@/components/LightsPicker';
 import { Body, Button, Chip, Field, ListRow, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { courtMeta, courtsNear, findGoogleCourts, GoogleCourt, useCourts } from '@/lib/courts';
+import { courtMeta, courtsNear, createPrivateCourt, findGoogleCourts, GoogleCourt, useCourts } from '@/lib/courts';
 import { formatMiles } from '@/lib/format';
 import { useProfile } from '@/lib/profile';
 import { getCurrentLocation, LatLng } from '@/lib/location';
 import { supabase } from '@/lib/supabase';
 
 type Setting = 'outdoor' | 'indoor';
+type Visibility = 'public' | 'private';
 
 type Prefill = { name?: string; lat?: string; lng?: string; address?: string; placeId?: string };
 
@@ -32,6 +33,7 @@ export default function NewCourtScreen() {
   const [address, setAddress] = useState(prefill.address ?? '');
   const [count, setCount] = useState('');
   const [setting, setSetting] = useState<Setting>('outdoor');
+  const [visibility, setVisibility] = useState<Visibility>('public');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [lights, setLights] = useState<LightsValue>({ has: null, until: null });
@@ -94,6 +96,26 @@ export default function NewCourtScreen() {
       return;
     }
     setBusy(true);
+    if (visibility === 'private') {
+      try {
+        const id = await createPrivateCourt(false, {
+          name: name.trim(),
+          lat: pin.lat,
+          lng: pin.lng,
+          address: address.trim() || null,
+          court_count: courtCount,
+          indoor: setting === 'indoor',
+        });
+        if (lights.has !== null) await saveLights(false, id, lights).catch(() => {});
+        Alert.alert('Saved', 'Your private court is ready. Only you and your friends can see it.');
+        router.replace({ pathname: '/court/[id]', params: { id } });
+      } catch (e) {
+        Alert.alert("Couldn't save the court", e instanceof Error ? e.message : 'Try again.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     const { data: courtId, error } = await supabase.rpc('submit_court', {
       p_name: name.trim(),
       p_lat: pin.lat,
@@ -142,6 +164,21 @@ export default function NewCourtScreen() {
           </Body>
         </View>
       ) : null}
+      <View style={{ gap: 8 }}>
+        <Segmented<Visibility>
+          value={visibility}
+          onChange={setVisibility}
+          options={[
+            { value: 'public', label: 'Public court' },
+            { value: 'private', label: 'Private (friends)' },
+          ]}
+        />
+        <Body size={13} tone="muted">
+          {visibility === 'public'
+            ? 'Everyone can find and play here. An admin checks it first, then it goes on the map.'
+            : 'Saved right away. Only you and your friends can see it, and it is never sent to an admin. You can\'t make one where a public court already is.'}
+        </Body>
+      </View>
       <Body tone="muted">Put the pin right on the courts. Tap the map or drag the pin to move it.</Body>
       {nearby.length > 0 ? (
         <View style={{ gap: 8 }}>
@@ -181,17 +218,19 @@ export default function NewCourtScreen() {
         </Body>
       ) : null}
       <LightsPicker value={lights} onChange={setLights} />
-      <Field
-        label="Anything the admin should know? (optional)"
-        placeholder="Lights until 10, bring your own net"
-        value={note}
-        onChangeText={setNote}
-        multiline
-        maxLength={500}
-        style={{ height: 88, paddingTop: 12 }}
-      />
+      {visibility === 'public' ? (
+        <Field
+          label="Anything the admin should know? (optional)"
+          placeholder="Lights until 10, bring your own net"
+          value={note}
+          onChangeText={setNote}
+          multiline
+          maxLength={500}
+          style={{ height: 88, paddingTop: 12 }}
+        />
+      ) : null}
 
-      <Button label={busy ? 'Sending…' : profile?.is_admin ? 'Add to the map' : 'Submit for review'} size="lg" disabled={busy || !ready} onPress={submit} />
+      <Button label={busy ? 'Sending…' : visibility === 'private' ? 'Save private court' : profile?.is_admin ? 'Add to the map' : 'Submit for review'} size="lg" disabled={busy || !ready} onPress={submit} />
     </Screen>
   );
 }

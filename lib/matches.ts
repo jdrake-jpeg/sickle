@@ -167,12 +167,14 @@ export async function cancelChallenge(demoMode: boolean, id: string) {
 const toDbOrder = (row: ChallengeRow, mine: GameScore[]) =>
   row.i_challenged ? mine : mine.map(([a, b]) => [b, a] as GameScore);
 
-export async function submitScore(demoMode: boolean, row: ChallengeRow, mine: GameScore[]) {
+// courtId: where it was really played, if that isn't the planned court.
+export async function submitScore(demoMode: boolean, row: ChallengeRow, mine: GameScore[], courtId?: string, courtName?: string) {
+  const moved = courtId && courtId !== row.court_id ? courtId : undefined;
   if (demoMode || !supabase) {
     const wins = mine.filter(([a, b]) => a > b).length;
-    return demoUpdate(row.challenge_id, { match_id: 'demo-' + row.challenge_id, match_status: 'awaiting_confirmation', games: mine, i_won: wins * 2 > mine.length, submitted_by_name: 'Drake', played_at: new Date().toISOString() });
+    return demoUpdate(row.challenge_id, { ...(moved ? { court_id: moved, court_name: courtName ?? row.court_name } : {}), match_id: 'demo-' + row.challenge_id, match_status: 'awaiting_confirmation', games: mine, i_won: wins * 2 > mine.length, submitted_by_name: 'Drake', played_at: new Date().toISOString() });
   }
-  await call('submit_match_result', { p_challenge: row.challenge_id, p_games: toDbOrder(row, mine) });
+  await call('submit_match_result', { p_challenge: row.challenge_id, p_games: toDbOrder(row, mine), ...(moved ? { p_court: moved } : {}) });
 }
 
 export async function confirmResult(demoMode: boolean, row: ChallengeRow) {

@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { courtsNear, useCourts } from '@/lib/courts';
 import { formatMiles } from '@/lib/format';
 import { getLocationIfAllowed, LatLng } from '@/lib/location';
-import { fetchMyTeams, sendChallenge, TeamRow } from '@/lib/matches';
+import { fetchMyTeams, fetchTeamDetail, sendChallenge, TeamRow } from '@/lib/matches';
 import { BestOf, matchLengthLabel } from '@/lib/scores';
 
 const times = [
@@ -39,6 +39,8 @@ export default function NewChallengeScreen() {
   const { courts } = useCourts();
   const [teams, setTeams] = useState<TeamRow[] | null>(null);
   const [myTeam, setMyTeam] = useState<string | null>(null);
+  // Singles teams only play singles teams, doubles only doubles.
+  const [singles, setSingles] = useState<boolean | null>(null);
   const [courtId, setCourtId] = useState<string | null>(court ?? null);
   const [day, setDay] = useState(0);
   const [hour, setHour] = useState<number | null>(null);
@@ -58,11 +60,20 @@ export default function NewChallengeScreen() {
   }, [courtId, here, sorted]);
 
   useEffect(() => {
-    fetchMyTeams(demoMode).then((t) => {
-      setTeams(t);
-      if (t.length === 1) setMyTeam(t[0].team_id);
-    });
+    fetchTeamDetail(demoMode, team).then((d) => setSingles(Boolean(d?.is_singles)));
+  }, [demoMode, team]);
+
+  useEffect(() => {
+    fetchMyTeams(demoMode).then(setTeams);
   }, [demoMode]);
+
+  // Only your teams of the same kind can play: your singles team against a
+  // singles team, a doubles team against a doubles team.
+  const playable = singles === null || teams === null ? null : teams.filter((t) => Boolean(t.is_singles) === singles);
+
+  useEffect(() => {
+    if (playable && playable.length === 1) setMyTeam(playable[0].team_id);
+  }, [playable]);
 
   const when = hour === null ? null : new Date(new Date(days[day].date).setHours(hour));
   const inPast = when !== null && when.getTime() < Date.now();
@@ -82,15 +93,21 @@ export default function NewChallengeScreen() {
     }
   };
 
-  if (teams && teams.length === 0) {
+  if (playable && playable.length === 0) {
     return (
       <Screen>
         <Card style={{ padding: 16, gap: 10 }}>
-          <Heading>YOU NEED A PARTNER FIRST</Heading>
-          <Body tone="muted">Challenges are 2 vs 2. Make a team with a partner, then come back.</Body>
-          <Link href="/team/new" asChild>
-            <Button label="Find a partner" />
-          </Link>
+          <Heading>{singles ? "SINGLES ISN'T READY YET" : 'YOU NEED A PARTNER FIRST'}</Heading>
+          <Body tone="muted">
+            {singles
+              ? 'Your singles team shows up once the latest Sickle update finishes loading. Close the app and open it again.'
+              : 'That team plays doubles, 2 vs 2. Make a team with a partner, then come back.'}
+          </Body>
+          {singles ? null : (
+            <Link href="/team/new" asChild>
+              <Button label="Find a partner" />
+            </Link>
+          )}
         </Card>
       </Screen>
     );
@@ -99,7 +116,9 @@ export default function NewChallengeScreen() {
   return (
     <Screen>
       <Heading size={22}>CHALLENGE {(teamName || 'this team').toUpperCase()}</Heading>
-      <Body tone="muted">Ranked. It counts once both teams agree on the score.</Body>
+      <Body tone="muted">
+        {singles ? 'Singles, 1 vs 1. ' : ''}Ranked. It counts once {singles ? 'you both' : 'both teams'} agree on the score.
+      </Body>
 
       <View style={{ gap: 8 }}>
         <Body weight="semibold">Match length</Body>
@@ -113,14 +132,16 @@ export default function NewChallengeScreen() {
         </Body>
       </View>
 
-      <View style={{ gap: 8 }}>
-        <Body weight="semibold">Your team</Body>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {(teams ?? []).map((t) => (
-            <Chip key={t.team_id} label={t.team_name} selected={myTeam === t.team_id} onPress={() => setMyTeam(t.team_id)} />
-          ))}
+      {singles ? null : (
+        <View style={{ gap: 8 }}>
+          <Body weight="semibold">Your team</Body>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {(playable ?? []).map((t) => (
+              <Chip key={t.team_id} label={t.team_name} selected={myTeam === t.team_id} onPress={() => setMyTeam(t.team_id)} />
+            ))}
+          </View>
         </View>
-      </View>
+      )}
 
       <View style={{ gap: 8 }}>
         <Body weight="semibold">Court</Body>

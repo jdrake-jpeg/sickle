@@ -45,7 +45,7 @@ export function HistoryList({ rows, empty }: { rows: HistoryRow[] | null; empty:
             </Body>
           </View>
           <Body size={13} tone="muted">
-            {r.with_name ? `With ${r.with_name} · ` : ''}
+            {r.is_singles ? 'Singles · ' : r.with_name ? `With ${r.with_name} · ` : ''}
             {formatWhen(r.played_at)}
           </Body>
           <Link href={{ pathname: '/court/[id]', params: { id: r.court_id } }} asChild>

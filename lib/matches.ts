@@ -37,7 +37,16 @@ export type ChallengeRow = {
 
 export const bestOfOf = (row: Pick<ChallengeRow, 'best_of'>): BestOf => (row.best_of === 1 ? 1 : 3);
 
-export type TeamRow = { team_id: string; team_name: string; partner_id?: string; partner_name?: string; wins: number; losses: number };
+export type TeamRow = {
+  team_id: string;
+  team_name: string;
+  partner_id?: string | null;
+  partner_name?: string | null;
+  wins: number;
+  losses: number;
+  // Every player has one built in singles team. Missing on an older database.
+  is_singles?: boolean;
+};
 
 const hoursFromNow = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
 
@@ -72,8 +81,9 @@ const demoChallenges: ChallengeRow[] = [
 ];
 
 const demoTeams: TeamRow[] = [
-  { team_id: 'm1', team_name: 'You + Jack', partner_id: 'p1', partner_name: 'Jack Thompson', wins: 14, losses: 5 },
-  { team_id: 'm2', team_name: 'You + Tyler', partner_id: 'p4', partner_name: 'Tyler Kim', wins: 9, losses: 4 },
+  { team_id: 'm1', team_name: 'You + Jack', partner_id: 'p1', partner_name: 'Jack Thompson', wins: 14, losses: 5, is_singles: false },
+  { team_id: 's1', team_name: 'You', partner_id: null, partner_name: null, wins: 3, losses: 1, is_singles: true },
+  { team_id: 'm2', team_name: 'You + Tyler', partner_id: 'p4', partner_name: 'Tyler Kim', wins: 9, losses: 4, is_singles: false },
 ];
 
 // ---------------------------------------------------------------------------
@@ -197,12 +207,17 @@ export async function sendChallenge(demoMode: boolean, myTeam: string, theirTeam
 
 export async function fetchMyTeams(demoMode: boolean): Promise<TeamRow[]> {
   if (demoMode || !supabase) return demoTeams;
+  // Singles included. Falls back to doubles only if the singles update isn't in the database yet.
+  const all = await supabase.rpc('my_teams_all');
+  if (!all.error) return (all.data ?? []) as TeamRow[];
   const { data } = await supabase.rpc('my_teams');
   return (data ?? []) as TeamRow[];
 }
 
 export async function fetchPlayerTeams(demoMode: boolean, profileId: string): Promise<TeamRow[]> {
   if (demoMode || !supabase) return [{ team_id: 't-' + profileId, team_name: 'Their team', wins: 3, losses: 2 }];
+  const all = await supabase.rpc('player_teams_all', { p_profile: profileId });
+  if (!all.error) return (all.data ?? []) as TeamRow[];
   const { data } = await supabase.rpc('player_teams', { p_profile: profileId });
   return (data ?? []) as TeamRow[];
 }
@@ -223,7 +238,8 @@ export type HistoryRow = {
   team_id?: string;
   team_name?: string;
   with_id?: string;
-  with_name?: string;
+  with_name?: string | null;
+  is_singles?: boolean;
 };
 
 export type TeamDetail = {
@@ -234,6 +250,7 @@ export type TeamDetail = {
   wins: number;
   losses: number;
   members: { id: string; name: string; username: string }[];
+  is_singles?: boolean;
 };
 
 const demoHistory: HistoryRow[] = [

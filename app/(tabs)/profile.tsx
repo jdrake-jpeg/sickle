@@ -31,6 +31,8 @@ export default function ProfileScreen() {
   );
 
   const name = profile?.display_name ?? '';
+  const doubles = teams.filter((t) => !t.is_singles);
+  const solo = teams.find((t) => t.is_singles);
   const wins = teams.reduce((n, t) => n + Number(t.wins), 0);
   const losses = teams.reduce((n, t) => n + Number(t.losses), 0);
   const played = wins + losses;
@@ -70,7 +72,7 @@ export default function ProfileScreen() {
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Stat value={`${wins}–${losses}`} label="Record" />
         <Stat value={played ? `${Math.round((wins / played) * 100)}%` : '–'} label="Win rate" />
-        <Stat value={String(teams.length)} label="Teams" tone="accent" />
+        <Stat value={String(doubles.length)} label="Teams" tone="accent" />
         <Stat value={String(friendCount)} label="Friends" />
       </View>
 
@@ -103,17 +105,17 @@ export default function ProfileScreen() {
 
       <View style={{ gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <SectionHeader title={`My teams (${teams.length})`} />
+          <SectionHeader title={`My teams (${doubles.length})`} />
           <Link href="/team/new" asChild>
             <Button label="+ New team" size="sm" />
           </Link>
         </View>
-        {teams.length === 0 ? (
+        {doubles.length === 0 ? (
           <Card style={{ padding: 16 }}>
-            <Body tone="muted">No teams yet. Tap + New team and pick a partner.</Body>
+            <Body tone="muted">No doubles teams yet. Tap + New team and pick a partner.</Body>
           </Card>
         ) : null}
-        {teams.map((team) => (
+        {doubles.map((team) => (
           <Link key={team.team_id} href={{ pathname: '/team/[id]', params: { id: team.team_id } }} asChild>
             <Pressable accessibilityRole="link">
               <ListRow
@@ -129,6 +131,22 @@ export default function ProfileScreen() {
             </Pressable>
           </Link>
         ))}
+        {solo ? (
+          <Link href={{ pathname: '/team/[id]', params: { id: solo.team_id } }} asChild>
+            <Pressable accessibilityRole="link">
+              <ListRow
+                left={<Avatar initials={initialsOf(name)} size={40} />}
+                title="Singles"
+                subtitle={`${solo.wins}–${solo.losses} · just you`}
+                right={
+                  <Body size={13} weight="semibold" tone="accent">
+                    History
+                  </Body>
+                }
+              />
+            </Pressable>
+          </Link>
+        ) : null}
       </View>
 
       <View style={{ gap: 6 }}>

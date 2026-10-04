@@ -80,9 +80,12 @@ export async function fetchPendingCourts(demoMode: boolean): Promise<PendingCour
   );
 }
 
-export async function fetchLeaderboard(courtId: string): Promise<LeaderboardRow[]> {
+// Doubles by default. Singles needs the singles update in the database.
+export async function fetchLeaderboard(courtId: string, singles = false): Promise<LeaderboardRow[]> {
   if (!supabase) return [];
-  const { data } = await supabase.rpc('court_leaderboard', { p_court: courtId });
+  const { data } = singles
+    ? await supabase.rpc('court_leaderboard', { p_court: courtId, p_singles: true })
+    : await supabase.rpc('court_leaderboard', { p_court: courtId });
   return (data as LeaderboardRow[] | null) ?? [];
 }
 

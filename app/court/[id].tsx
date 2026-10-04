@@ -5,7 +5,7 @@ import { Alert, View } from 'react-native';
 import { CourtAdminPanel } from '@/components/CourtAdminPanel';
 import { CourtMap } from '@/components/CourtMap';
 import { LightsPicker, lightsText, LightsValue, saveLights } from '@/components/LightsPicker';
-import { Body, Button, Card, Chip, Display, Field, Heading, Screen, SectionHeader } from '@/components/ui';
+import { Body, Button, Card, Chip, Display, Field, Heading, Screen, SectionHeader, Segmented } from '@/components/ui';
 import { fonts } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import {
@@ -37,6 +37,7 @@ export default function CourtScreen() {
   const { isAdmin } = useProfile();
   const [court, setCourt] = useState<Court | null | undefined>(undefined);
   const [rows, setRows] = useState<Row[]>([]);
+  const [format, setFormat] = useState<'doubles' | 'singles'>('doubles');
   const [reports, setReports] = useState<ConditionReport[]>([]);
   const [picked, setPicked] = useState<Condition | null>(null);
   const [note, setNote] = useState('');
@@ -90,12 +91,12 @@ export default function CourtScreen() {
       const { data } = await supabase!.from('courts').select('*').eq('id', id).maybeSingle();
       setCourt((data as Court | null) ?? null);
       if (!data) return;
-      const [board, mine] = await Promise.all([fetchLeaderboard(id), fetchMyTeamIds(session?.user.id)]);
+      const [board, mine] = await Promise.all([fetchLeaderboard(id, format === 'singles'), fetchMyTeamIds(session?.user.id)]);
       setRows(
         board.map((r) => ({ rank: r.rank, teamId: r.team_id, name: r.team_name, rating: r.rating, record: `${r.wins}–${r.losses}`, mine: mine.has(r.team_id) })),
       );
     })();
-  }, [demoMode, id, session?.user.id]);
+  }, [demoMode, id, session?.user.id, format]);
 
   if (court === undefined) return <Screen>{null}</Screen>;
   if (!court) {
@@ -190,7 +191,7 @@ export default function CourtScreen() {
       {champs ? (
         <View style={{ backgroundColor: colors.accentFill, borderRadius: 18, padding: 16, gap: 2 }}>
           <Heading size={12} tone="onAccent" style={{ letterSpacing: 1 }}>
-            COURT CHAMPS
+            {format === 'singles' ? 'SINGLES COURT CHAMP' : 'COURT CHAMPS'}
           </Heading>
           <Heading size={22} tone="onAccent">
             {champs.name}
@@ -202,10 +203,22 @@ export default function CourtScreen() {
       ) : null}
 
       <View style={{ gap: 6 }}>
-        <SectionHeader title="Leaderboard" detail="Doubles teams" />
+        <SectionHeader title="Leaderboard" />
+        <Segmented
+          value={format}
+          onChange={setFormat}
+          options={[
+            { value: 'doubles', label: 'Doubles' },
+            { value: 'singles', label: 'Singles' },
+          ]}
+        />
         {rows.length === 0 ? (
           <Card style={{ padding: 16 }}>
-            <Body tone="muted">No ranked matches here yet. Challenge a team to a match at {court.name} to get on the board.</Body>
+            <Body tone="muted">
+              {format === 'singles'
+                ? `No ranked singles matches here yet. Challenge a player to a singles match at ${court.name} to get on the board.`
+                : `No ranked matches here yet. Challenge a team to a match at ${court.name} to get on the board.`}
+            </Body>
           </Card>
         ) : null}
         {rows.map((row) => (

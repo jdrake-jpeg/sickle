@@ -189,15 +189,15 @@ export default function PlayerScreen() {
 
       {teams.length > 0 ? (
         <View style={{ gap: 8 }}>
-          <SectionHeader title={`${firstName}'s teams`} />
+          <SectionHeader title={`${firstName}'s teams`} detail="Tap one to see its wins" />
           {teams.map((t) => (
             <Link key={t.team_id} href={{ pathname: '/team/[id]', params: { id: t.team_id } }} asChild>
               <Pressable accessibilityRole="link">
                 <ListRow
-                  title={t.team_name}
+                  title={t.is_singles ? 'Singles' : t.team_name}
                   subtitle={`${t.wins}–${t.losses} · tap for history`}
                   right={
-                    <Link href={{ pathname: '/challenge/new', params: { team: t.team_id, teamName: t.team_name } }} asChild>
+                    <Link href={{ pathname: '/challenge/new', params: { team: t.team_id, teamName: t.is_singles ? player.name : t.team_name } }} asChild>
                       <Button label="Challenge" variant="dangerOutline" size="sm" />
                     </Link>
                   }

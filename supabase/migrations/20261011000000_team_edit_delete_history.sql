@@ -109,6 +109,9 @@ declare
   v_name text := nullif(trim(coalesce(p_name, '')), '');
 begin
   if not public.is_team_member(p_team, auth.uid()) then raise exception 'You are not on that team'; end if;
+  if exists (select 1 from public.teams where id = p_team and player_high is null) then
+    raise exception 'Your singles team is built in and can''t be changed';
+  end if;
   if v_name is not null and char_length(v_name) > 40 then raise exception 'Keep the team name under 40 characters'; end if;
   update public.teams set name = v_name where id = p_team and deleted_at is null;
   if not found then raise exception 'That team is not active anymore'; end if;
@@ -126,6 +129,9 @@ set search_path = ''
 as $$
 begin
   if not public.is_team_member(p_team, auth.uid()) then raise exception 'You are not on that team'; end if;
+  if exists (select 1 from public.teams where id = p_team and player_high is null) then
+    raise exception 'Your singles team is built in and can''t be changed';
+  end if;
   if not exists (select 1 from public.teams where id = p_team and deleted_at is null) then
     raise exception 'That team is not active anymore';
   end if;
@@ -161,7 +167,7 @@ $$;
 -- themselves, and blocked pairs see nothing.
 
 create function public.team_detail(p_team uuid)
-returns table (team_id uuid, team_name text, custom_name text, is_member boolean, wins bigint, losses bigint, members jsonb)
+returns table (team_id uuid, team_name text, custom_name text, is_member boolean, wins bigint, losses bigint, members jsonb, is_singles boolean)
 language sql
 stable
 security definer
@@ -174,7 +180,8 @@ as $$
          coalesce(r.wins, 0),
          coalesce(r.losses, 0),
          (select jsonb_agg(jsonb_build_object('id', p.id, 'name', p.display_name, 'username', p.username) order by p.display_name)
-          from public.profiles p where p.id in (t.player_low, t.player_high))
+          from public.profiles p where p.id in (t.player_low, t.player_high)),
+         t.player_high is null
   from public.teams t
   left join public.team_records r on r.team_id = t.id
   where t.id = p_team
@@ -188,7 +195,7 @@ $$;
 create function public.team_history(p_team uuid)
 returns table (
   challenge_id uuid, played_at timestamptz, court_id uuid, court_name text,
-  opponent_id uuid, opponent_name text, won boolean, games jsonb, best_of smallint
+  opponent_id uuid, opponent_name text, won boolean, games jsonb, best_of smallint, is_singles boolean
 )
 language sql
 stable
@@ -204,7 +211,8 @@ as $$
                         else jsonb_build_array(g.team_b_score, g.team_a_score) end
                    order by g.game_number)
           from public.games g where g.match_id = m.id),
-         c.best_of
+         c.best_of,
+         t.player_high is null
   from public.teams t
   join public.matches m on m.status = 'confirmed' and t.id in (m.team_a_id, m.team_b_id)
   join public.teams opp on opp.id = case when m.team_a_id = t.id then m.team_b_id else m.team_a_id end
@@ -229,7 +237,7 @@ create function public.player_history(p_profile uuid)
 returns table (
   challenge_id uuid, played_at timestamptz, court_id uuid, court_name text,
   team_id uuid, team_name text, with_id uuid, with_name text,
-  opponent_id uuid, opponent_name text, won boolean, games jsonb, best_of smallint
+  opponent_id uuid, opponent_name text, won boolean, games jsonb, best_of smallint, is_singles boolean
 )
 language sql
 stable
@@ -247,14 +255,15 @@ as $$
                         else jsonb_build_array(g.team_b_score, g.team_a_score) end
                    order by g.game_number)
           from public.games g where g.match_id = m.id),
-         c.best_of
+         c.best_of,
+         t.player_high is null
   from public.profiles p
   join public.teams t on p.id in (t.player_low, t.player_high)
   join public.matches m on m.status = 'confirmed' and t.id in (m.team_a_id, m.team_b_id)
   join public.teams opp on opp.id = case when m.team_a_id = t.id then m.team_b_id else m.team_a_id end
   join public.challenges c on c.id = m.challenge_id
   join public.courts co on co.id = m.court_id
-  join public.profiles mate on mate.id = case when t.player_low = p.id then t.player_high else t.player_low end
+  left join public.profiles mate on mate.id = case when t.player_low = p.id then t.player_high else t.player_low end
   where p.id = p_profile
     and (p.show_record or p.id = auth.uid())
     and not public.players_blocked(auth.uid(), p.id)

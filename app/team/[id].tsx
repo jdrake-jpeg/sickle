@@ -80,7 +80,7 @@ export default function TeamScreen() {
   return (
     <Screen>
       <Stack.Screen options={{ title: 'Team' }} />
-      <Display size={26}>{team.team_name.toUpperCase()}</Display>
+      <Display size={26}>{(team.is_singles ? `${team.team_name} · SINGLES` : team.team_name).toUpperCase()}</Display>
 
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Stat value={`${team.wins}–${team.losses}`} label="Record" />
@@ -88,7 +88,7 @@ export default function TeamScreen() {
       </View>
 
       <View style={{ gap: 8 }}>
-        <SectionHeader title="Players" />
+        <SectionHeader title={team.is_singles ? 'Player' : 'Players'} />
         {team.members.map((m) => (
           <Link key={m.id} href={{ pathname: '/player/[id]', params: { id: m.id } }} asChild>
             <Pressable accessibilityRole="link">
@@ -98,7 +98,7 @@ export default function TeamScreen() {
         ))}
       </View>
 
-      {team.is_member ? (
+      {team.is_member && team.is_singles ? null : team.is_member ? (
         editing ? (
           <Card style={{ padding: 16, gap: 12 }}>
             <Field label="Team name (leave blank to use both names)" value={name} onChangeText={setName} maxLength={40} />

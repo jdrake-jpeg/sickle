@@ -13,6 +13,7 @@ import {
   conditionInfo,
   ConditionReport,
   conditions,
+  conditionHours,
   Court,
   courtMeta,
   fetchCourtConditions,
@@ -121,6 +122,13 @@ export default function CourtScreen() {
       <CourtMap height={160} interactive={false} center={court} courts={[{ id: court.id, name: court.name, lat: court.lat, lng: court.lng }]} />
       <Button label="Directions" variant="outline" size="sm" onPress={() => openDirections(court)} />
 
+      {court.admin_note ? (
+        <Card style={{ padding: 16, gap: 6 }}>
+          <SectionHeader title="Good to know" detail="From a Sickle admin" />
+          <Body>{court.admin_note}</Body>
+        </Card>
+      ) : null}
+
       <Card style={{ padding: 16, gap: 10 }}>
         <SectionHeader title="Lights" />
         {editingLights ? (
@@ -147,7 +155,7 @@ export default function CourtScreen() {
       </Card>
 
       <Card style={{ padding: 16, gap: 10 }}>
-        <SectionHeader title="Conditions now" detail="Last 6 hours" />
+        <SectionHeader title="Conditions now" detail={`Last ${conditionHours} hours`} />
         {latest ? (
           <View style={{ gap: 6 }}>
             <Heading size={20}>
@@ -161,7 +169,7 @@ export default function CourtScreen() {
             ))}
           </View>
         ) : (
-          <Body tone="muted">No reports yet today. At the courts? Tell everyone how it is.</Body>
+          <Body tone="muted">No recent reports. At the courts? Tell everyone how it is. Reports clear after {conditionHours} hours.</Body>
         )}
         <Body size={13} weight="semibold" tone="muted">
           How is it right now?

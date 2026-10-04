@@ -15,6 +15,8 @@ export type Court = {
   court_count: number | null;
   has_lights?: boolean | null;
   lights_until?: number | null;
+  // A permanent note from an admin (parking, hours, rules). Never fades.
+  admin_note?: string | null;
 };
 
 export type PendingCourt = Court & {
@@ -188,7 +190,9 @@ export function courtsNear<T extends { lat: number; lng: number }>(here: { lat: 
 }
 
 // How a court is right now, from players who are there. Reports fade after
-// 6 hours (court_conditions in supabase/migrations).
+// 2 hours (court_conditions in supabase/migrations). To change the timer,
+// change it there and in conditionHours below.
+export const conditionHours = 2;
 export type Condition = 'good' | 'wet' | 'windy' | 'icy' | 'crowded';
 export type ConditionReport = { condition: Condition; note: string | null; reporter_name: string; created_at: string };
 
@@ -238,6 +242,13 @@ export async function adminUpdateCourt(demoMode: boolean, courtId: string, edit:
     p_lat: edit.lat ?? null,
     p_lng: edit.lng ?? null,
   });
+  if (error) throw error;
+}
+
+// Admin: set the permanent note shown on a court's page. Blank clears it.
+export async function adminSetCourtNote(demoMode: boolean, courtId: string, note: string) {
+  if (demoMode || !supabase) return;
+  const { error } = await supabase.rpc('admin_set_court_note', { p_court: courtId, p_note: note });
   if (error) throw error;
 }
 

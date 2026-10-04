@@ -97,15 +97,16 @@ export default function CourtsScreen() {
                 padding: 14,
                 flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'space-between',
+                gap: 12,
                 borderColor: pendingCount > 0 ? colors.danger : colors.border,
               }}>
-              <Body weight="semibold">
+              {/* The text takes the leftover room and wraps, so Review always stays on screen. */}
+              <Body weight="semibold" style={{ flex: 1 }}>
                 {pendingCount > 0
                   ? `${pendingCount} ${pendingCount === 1 ? 'court is' : 'courts are'} waiting for review`
                   : 'Admin: review courts or add ones found on the map'}
               </Body>
-              <Body weight="bold" tone="accent">
+              <Body weight="bold" tone="accent" style={{ flexShrink: 0 }}>
                 Review
               </Body>
             </Card>

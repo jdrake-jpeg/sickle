@@ -41,4 +41,9 @@ end $$;
 
 reset role;
 reset request.jwt.claim.sub;
+
+-- Clean up so later tests don't see these players.
+delete from public.profiles where id in ('00000000-0000-0000-0000-00000000ff01', '00000000-0000-0000-0000-00000000ff02');
+delete from auth.users where id in ('00000000-0000-0000-0000-00000000ff01', '00000000-0000-0000-0000-00000000ff02');
+
 \echo 'Username check tests passed'

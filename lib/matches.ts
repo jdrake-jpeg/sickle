@@ -207,6 +207,86 @@ export async function fetchPlayerTeams(demoMode: boolean, profileId: string): Pr
   return (data ?? []) as TeamRow[];
 }
 
+// A confirmed match from one team's (or one player's) point of view.
+// Scores are [theirs, opponent's].
+export type HistoryRow = {
+  challenge_id: string;
+  played_at: string;
+  court_id: string;
+  court_name: string;
+  opponent_id: string;
+  opponent_name: string;
+  won: boolean;
+  games: GameScore[] | null;
+  best_of: BestOf | null;
+  // Only in a player's history: which team they played on, and with whom.
+  team_id?: string;
+  team_name?: string;
+  with_id?: string;
+  with_name?: string;
+};
+
+export type TeamDetail = {
+  team_id: string;
+  team_name: string;
+  custom_name: string | null;
+  is_member: boolean;
+  wins: number;
+  losses: number;
+  members: { id: string; name: string; username: string }[];
+};
+
+const demoHistory: HistoryRow[] = [
+  { challenge_id: 'h1', played_at: hoursFromNow(-30), court_id: 'porter', court_name: 'Porter Park', opponent_id: 't1', opponent_name: 'Kade + Mason', won: true, games: [[11, 7], [11, 9]], best_of: 3, team_id: 'm1', team_name: 'You + Jack', with_id: 'p1', with_name: 'Jack Thompson' },
+  { challenge_id: 'h2', played_at: hoursFromNow(-96), court_id: 'porter', court_name: 'Porter Park', opponent_id: 't4', opponent_name: 'Josh + Ben', won: false, games: [[8, 11]], best_of: 1, team_id: 'm1', team_name: 'You + Jack', with_id: 'p1', with_name: 'Jack Thompson' },
+];
+
+export async function fetchTeamDetail(demoMode: boolean, teamId: string): Promise<TeamDetail | null> {
+  if (demoMode || !supabase) {
+    const t = demoTeams.find((x) => x.team_id === teamId) ?? demoTeams[0];
+    return {
+      team_id: t.team_id,
+      team_name: t.team_name,
+      custom_name: null,
+      is_member: true,
+      wins: t.wins,
+      losses: t.losses,
+      members: [
+        { id: 'me', name: 'You', username: 'you' },
+        { id: t.partner_id ?? 'p1', name: t.partner_name ?? 'Partner', username: 'partner' },
+      ],
+    };
+  }
+  const { data } = await supabase.rpc('team_detail', { p_team: teamId });
+  return ((data ?? []) as TeamDetail[])[0] ?? null;
+}
+
+export async function fetchTeamHistory(demoMode: boolean, teamId: string): Promise<HistoryRow[]> {
+  if (demoMode || !supabase) return demoHistory;
+  const { data } = await supabase.rpc('team_history', { p_team: teamId });
+  return (data ?? []) as HistoryRow[];
+}
+
+export async function fetchPlayerHistory(demoMode: boolean, profileId: string): Promise<HistoryRow[]> {
+  if (demoMode || !supabase) return demoHistory;
+  const { data } = await supabase.rpc('player_history', { p_profile: profileId });
+  return (data ?? []) as HistoryRow[];
+}
+
+const missingUpdate = "Team editing isn't in the database yet. Run the newest files from supabase/migrations in the Supabase SQL Editor.";
+
+export async function renameTeam(demoMode: boolean, teamId: string, name: string): Promise<void> {
+  if (demoMode || !supabase) return;
+  const { error } = await supabase.rpc('update_team_name', { p_team: teamId, p_name: name });
+  if (error) throw new Error(error.code === 'PGRST202' ? missingUpdate : error.message);
+}
+
+export async function deleteTeam(demoMode: boolean, teamId: string): Promise<void> {
+  if (demoMode || !supabase) return;
+  const { error } = await supabase.rpc('delete_team', { p_team: teamId });
+  if (error) throw new Error(error.code === 'PGRST202' ? missingUpdate : error.message);
+}
+
 // ---------------------------------------------------------------------------
 // Private ratings
 // ---------------------------------------------------------------------------

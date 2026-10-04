@@ -6,6 +6,7 @@ import { tierOf } from '@/components/SkillPicker';
 import { Avatar, Body, Button, Card, Display, Heading, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
+import { fetchFriends } from '@/lib/friends';
 import { fetchMyTeams, fetchRatingSummary, matchStatusText, RatingSummary, refreshChallenges, TeamRow, useChallenges } from '@/lib/matches';
 import { useProfile } from '@/lib/profile';
 import { formatScores } from '@/lib/scores';
@@ -18,11 +19,13 @@ export default function ProfileScreen() {
   const challenges = useChallenges(demoMode);
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [ratings, setRatings] = useState<RatingSummary | null>(null);
+  const [friendCount, setFriendCount] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       fetchMyTeams(demoMode).then(setTeams);
       fetchRatingSummary(demoMode).then(setRatings);
+      fetchFriends(demoMode).then((f) => setFriendCount(f.filter((x) => x.relation === 'friend').length));
       refreshChallenges(demoMode);
     }, [demoMode]),
   );
@@ -68,6 +71,7 @@ export default function ProfileScreen() {
         <Stat value={`${wins}–${losses}`} label="Record" />
         <Stat value={played ? `${Math.round((wins / played) * 100)}%` : '–'} label="Win rate" />
         <Stat value={String(teams.length)} label="Teams" tone="accent" />
+        <Stat value={String(friendCount)} label="Friends" />
       </View>
 
       <Link href="/ratings" asChild>
@@ -99,7 +103,7 @@ export default function ProfileScreen() {
 
       <View style={{ gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <SectionHeader title="My teams" />
+          <SectionHeader title={`My teams (${teams.length})`} />
           <Link href="/team/new" asChild>
             <Button label="+ New team" size="sm" />
           </Link>
@@ -110,12 +114,20 @@ export default function ProfileScreen() {
           </Card>
         ) : null}
         {teams.map((team) => (
-          <ListRow
-            key={team.team_id}
-            left={<Avatar initials={initialsOf(team.partner_name ?? team.team_name)} size={40} />}
-            title={team.team_name}
-            subtitle={`${team.wins}–${team.losses} · with ${team.partner_name}`}
-          />
+          <Link key={team.team_id} href={{ pathname: '/team/[id]', params: { id: team.team_id } }} asChild>
+            <Pressable accessibilityRole="link">
+              <ListRow
+                left={<Avatar initials={initialsOf(team.partner_name ?? team.team_name)} size={40} />}
+                title={team.team_name}
+                subtitle={`${team.wins}–${team.losses} · with ${team.partner_name}`}
+                right={
+                  <Body size={13} weight="semibold" tone="accent">
+                    Edit
+                  </Body>
+                }
+              />
+            </Pressable>
+          </Link>
         ))}
       </View>
 

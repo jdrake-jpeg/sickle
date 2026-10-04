@@ -1,13 +1,14 @@
 import { Link, Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 
+import { HistoryList } from '@/components/HistoryList';
 import { tierOf } from '@/components/SkillPicker';
 import { Avatar, Body, Button, Card, Display, Field, Heading, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { addFriend, fetchRelation, Relation, relationLabel, removeFriend } from '@/lib/friends';
-import { fetchMyTeams, fetchPlayerTeams, TeamRow } from '@/lib/matches';
+import { fetchMyTeams, fetchPlayerHistory, fetchPlayerTeams, HistoryRow, TeamRow } from '@/lib/matches';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 
@@ -29,6 +30,7 @@ export default function PlayerScreen() {
   const [relation, setRelation] = useState<Relation>(null);
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [teamsVersion, setTeamsVersion] = useState(0);
+  const [history, setHistory] = useState<HistoryRow[] | null>(null);
   const [stats, setStats] = useState<{ wins: number | null; losses: number | null; hidden: boolean } | null>(null);
 
   // Their record, unless they've hidden it in Settings.
@@ -47,6 +49,10 @@ export default function PlayerScreen() {
       setTeams(theirs.filter((t) => !myIds.has(t.team_id)));
     });
   }, [demoMode, id, teamsVersion]);
+
+  useEffect(() => {
+    fetchPlayerHistory(demoMode, id).then(setHistory);
+  }, [demoMode, id]);
 
   useEffect(() => {
     fetchRelation(demoMode, id).then(setRelation);
@@ -185,17 +191,27 @@ export default function PlayerScreen() {
         <View style={{ gap: 8 }}>
           <SectionHeader title={`${firstName}'s teams`} />
           {teams.map((t) => (
-            <ListRow
-              key={t.team_id}
-              title={t.team_name}
-              subtitle={`${t.wins}–${t.losses}`}
-              right={
-                <Link href={{ pathname: '/challenge/new', params: { team: t.team_id, teamName: t.team_name } }} asChild>
-                  <Button label="Challenge" variant="dangerOutline" size="sm" />
-                </Link>
-              }
-            />
+            <Link key={t.team_id} href={{ pathname: '/team/[id]', params: { id: t.team_id } }} asChild>
+              <Pressable accessibilityRole="link">
+                <ListRow
+                  title={t.team_name}
+                  subtitle={`${t.wins}–${t.losses} · tap for history`}
+                  right={
+                    <Link href={{ pathname: '/challenge/new', params: { team: t.team_id, teamName: t.team_name } }} asChild>
+                      <Button label="Challenge" variant="dangerOutline" size="sm" />
+                    </Link>
+                  }
+                />
+              </Pressable>
+            </Link>
           ))}
+        </View>
+      ) : null}
+
+      {stats && !(stats.hidden && stats.wins == null) ? (
+        <View style={{ gap: 8 }}>
+          <SectionHeader title={`${firstName}'s matches`} />
+          <HistoryList rows={history} empty={`${firstName} hasn't played a confirmed match yet.`} />
         </View>
       ) : null}
 

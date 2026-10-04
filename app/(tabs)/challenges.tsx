@@ -3,7 +3,9 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
 import { SickleSlice } from '@/components/SickleSlice';
-import { Body, Button, Card, Display, Heading, InfoDrop, Screen, Segmented } from '@/components/ui';
+import { HelpFooter } from '@/components/HelpFooter';
+import { ShowMore, usePaged } from '@/components/ShowMore';
+import { Body, Button, Card, Display, Heading, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import {
   bestOfOf,
@@ -46,6 +48,8 @@ export default function ChallengesScreen() {
   const sent = all.filter((r) => r.status === 'pending' && r.i_challenged);
   const upcoming = all.filter((r) => r.status === 'accepted' && !(r.match_status === 'awaiting_confirmation' && r.awaiting_me));
   const played = all.filter((r) => r.status === 'completed' || (r.match_status && r.match_status !== 'awaiting_confirmation'));
+
+  const playedPaged = usePaged(played, 8);
 
   const act = async (id: string, action: () => Promise<unknown>) => {
     setBusy(id);
@@ -120,15 +124,6 @@ export default function ChallengesScreen() {
           { value: 'played', label: 'Played' },
         ]}
       />
-
-      <InfoDrop title="How do challenges work?">
-        <Body size={13} tone="muted">
-          New: challenges sent to you. Accept or decline. Sent: challenges you sent, waiting on an answer. Upcoming: accepted games, enter the score here after you play. Played: finished matches.
-        </Body>
-        <Body size={13} tone="muted">
-          After a game one side enters the score and the other side confirms it. Only confirmed games count for wins and leaderboards. To challenge someone, tap their profile from Play.
-        </Body>
-      </InfoDrop>
 
       {rows === null ? <Body tone="muted">Loading…</Body> : null}
 
@@ -250,7 +245,7 @@ export default function ChallengesScreen() {
       {tab === 'played' && rows ? (
         <>
           {played.length === 0 ? empty('No matches yet. Once a score is confirmed, it shows up here and you can rate the other players.') : null}
-          {played.map((r) => (
+          {playedPaged.shown.map((r) => (
             <Link key={r.challenge_id} href={{ pathname: '/match/[id]', params: { id: r.challenge_id } }} asChild>
               <Pressable accessibilityRole="link">
                 <Card style={{ padding: 16, gap: 4 }}>
@@ -276,8 +271,11 @@ export default function ChallengesScreen() {
               </Pressable>
             </Link>
           ))}
+          <ShowMore hasMore={playedPaged.hasMore} remaining={playedPaged.remaining} onPress={playedPaged.more} />
         </>
       ) : null}
+
+      <HelpFooter />
     </Screen>
   );
 }

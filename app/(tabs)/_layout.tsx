@@ -44,14 +44,18 @@ export default function TabLayout() {
     return () => clearTimeout(timer);
   }, [userId]);
 
-  // New messages and friend requests, for the Friends tab badge.
+  // Friend requests badge the Find people tab; new messages badge Profile, where your friends live.
   const [friendBadge, setFriendBadge] = useState(0);
+  const [chatBadge, setChatBadge] = useState(0);
   useEffect(() => {
     if (!session && !demoMode) return;
     let alive = true;
     const check = async () => {
       const [unread, friends] = await Promise.all([fetchUnreadCount(demoMode), fetchFriends(demoMode)]);
-      if (alive) setFriendBadge(unread + friends.filter((f) => f.relation === 'incoming').length);
+      if (alive) {
+        setFriendBadge(friends.filter((f) => f.relation === 'incoming').length);
+        setChatBadge(unread);
+      }
     };
     check();
     const timer = setInterval(check, 20000);
@@ -105,7 +109,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="friends"
         options={{
-          title: 'Friends',
+          title: 'Find people',
           tabBarBadge: friendBadge || undefined,
           tabBarIcon: ({ color }) => <TabIcon name={{ ios: 'person.2.fill', android: 'group', web: 'group' }} color={color} />,
         }}
@@ -114,6 +118,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
+          tabBarBadge: chatBadge || undefined,
           tabBarIcon: ({ color }) => (
             <TabIcon name={{ ios: 'person.crop.circle', android: 'person', web: 'person' }} color={color} />
           ),

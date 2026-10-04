@@ -80,3 +80,44 @@ export function PlayPrefs() {
     </View>
   );
 }
+
+// The short version for the Looking to Play card: what you're looking for and who
+// can challenge you. Settings has the full list.
+export function LookingFor({ settings, onChange }: { settings: PlaySettings; onChange: (next: Partial<PlaySettings>) => void }) {
+  type Kind = 'singles' | 'doubles' | 'both';
+  const kind: Kind = settings.plays_singles && settings.plays_doubles ? 'both' : settings.plays_singles ? 'singles' : 'doubles';
+  return (
+    <View style={{ gap: 12 }}>
+      <View style={{ gap: 6 }}>
+        <Body size={13} weight="semibold" tone="muted">
+          I want to play
+        </Body>
+        <Segmented<Kind>
+          accent
+          value={kind}
+          onChange={(v) => onChange({ plays_singles: v !== 'doubles', plays_doubles: v !== 'singles' })}
+          options={[
+            { value: 'singles', label: 'Singles' },
+            { value: 'doubles', label: 'Doubles' },
+            { value: 'both', label: 'Both' },
+          ]}
+        />
+      </View>
+      <View style={{ gap: 6 }}>
+        <Body size={13} weight="semibold" tone="muted">
+          Who can challenge me
+        </Body>
+        <Segmented<ChallengesFrom>
+          accent
+          value={settings.challenges_from}
+          onChange={(v) => onChange({ challenges_from: v })}
+          options={[
+            { value: 'everyone', label: 'Anyone' },
+            { value: 'friends', label: 'Friends' },
+            { value: 'nobody', label: 'Nobody' },
+          ]}
+        />
+      </View>
+    </View>
+  );
+}

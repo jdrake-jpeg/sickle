@@ -95,6 +95,9 @@ export default function OnboardingScreen() {
       <View style={{ gap: 6, paddingTop: 40 }}>
         <Display size={34}>SET UP YOUR PROFILE</Display>
         <Body tone="muted">This is how other players find you and team up.</Body>
+        <Body size={13} weight="semibold" tone="accent">
+          Your username and name can&apos;t be changed after you save, so check them first.
+        </Body>
       </View>
 
       <Field

@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
 import { CourtMap } from '@/components/CourtMap';
-import { Body, Button, Card, Display, Heading, InfoDrop, Screen, SearchField } from '@/components/ui';
+import { HelpFooter } from '@/components/HelpFooter';
+import { Body, Button, Card, Display, Heading, Screen, SearchField } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import {
   addMapCourt,
@@ -182,15 +183,6 @@ export default function CourtsScreen() {
       ) : null}
 
       <SearchField label="Search courts" placeholder="Court name or street" value={query} onChangeText={setQuery} />
-      <InfoDrop title="What are courts for?">
-        <Body size={13} tone="muted">
-          Every court has its own leaderboard. Pick the court you will play at when you send a challenge. Tap a court to see its top teams, its conditions (wet, crowded, nets down) and to report what it is like right now.
-        </Body>
-        <Body size={13} tone="muted">
-          Can&apos;t find your court? Use Add a court below.
-        </Body>
-      </InfoDrop>
-
       {searching ? null : (
         <>
           <CourtMap
@@ -328,6 +320,8 @@ export default function CourtsScreen() {
           <Button label="Add a court" variant="outline" size="sm" style={{ alignSelf: 'flex-start' }} />
         </Link>
       </Card>
+
+      <HelpFooter />
     </Screen>
   );
 }

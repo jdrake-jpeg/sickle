@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { TeamPick } from '@/components/TeamPick';
-import { Body, Button, Card, Heading, InfoDrop, Segmented } from '@/components/ui';
+import { Body, Button, Card, Heading, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { fetchMyTeams, fetchPlayerTeams, TeamRow, useTeamPlayers } from '@/lib/matches';
 import { BestOf } from '@/lib/scores';
@@ -129,9 +129,6 @@ export function ChallengeBuilder({ playerId, firstName, blocked, blockedNote }: 
             </Body>
           ) : null}
           <Button label="Next: pick court and time" size="lg" disabled={!ready} onPress={go} />
-          <InfoDrop title="How do challenges work?">
-            Pick singles or doubles and how long the game is. For doubles choose your team and the team of {firstName}&apos;s you want to play. Then pick a court and time and send it. {firstName} can accept or decline. After you play, one side enters the score and the other confirms it, and it counts for the leaderboard.
-          </InfoDrop>
         </>
       )}
     </Card>

@@ -2,19 +2,21 @@ import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, View } from 'react-native';
 
+import { HelpFooter } from '@/components/HelpFooter';
 import { LogoWordmark } from '@/components/Logo';
-import { PlayPrefs } from '@/components/PlayPrefs';
-import { SkillGuide, skillLabel } from '@/components/SkillPicker';
-import { Avatar, Body, Button, Card, Chip, Heading, InfoDrop, ListRow, Screen, SearchField, SectionHeader, Segmented } from '@/components/ui';
+import { LookingFor } from '@/components/PlayPrefs';
+import { ShowMore, usePaged } from '@/components/ShowMore';
+import { skillLabel } from '@/components/SkillPicker';
+import { Avatar, Body, Button, Card, Heading, ListRow, Screen, SectionHeader, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { formatMiles, initialsOf } from '@/lib/format';
 import { getCurrentLocation, getLocationIfAllowed, LatLng, LocationError } from '@/lib/location';
-import { formatTags } from '@/lib/play';
+import { useUnreadCount } from '@/lib/notifications';
+import { defaultPlaySettings, fetchPlaySettings, formatTags, PlaySettings, savePlaySettings } from '@/lib/play';
+import { useProfile } from '@/lib/profile';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
-import { useUnreadCount } from '@/lib/notifications';
-import { useClearOnBlur } from '@/lib/use-clear-on-blur';
 
 type Duration = '1h' | '2h' | 'tonight';
 
@@ -24,20 +26,9 @@ const durations: { value: Duration; label: string; until: string }[] = [
   { value: 'tonight', label: 'Tonight', until: 'until 11:59 PM' },
 ];
 
-// Same groups as the skill guide: Beginner 2.0 to 2.5, Intermediate 3.0 to
-// 3.5, Pro 4.0 to 4.5, Star 5.0 and up.
-const skillRanges: { label: string; min: number | null; max: number | null }[] = [
-  { label: 'Any skill', min: null, max: null },
-  { label: 'Beginner', min: null, max: 2.99 },
-  { label: 'Intermediate', min: 3.0, max: 3.99 },
-  { label: 'Pro', min: 4.0, max: 4.99 },
-  { label: 'Star', min: 5.0, max: null },
-];
+// Players who are looking right now, within this many miles.
+const nearbyRadius = 5;
 
-const ratingIntro = 'The number by a name is their skill level, from 2.0 (new) to 5.5+ (pro). Same scale as DUPR.';
-const distances = [1, 3, 5];
-
-type Format = 'any' | 'singles' | 'doubles';
 type Player = { id: string; name: string; username: string; skill: number | null; distance: string | null; plays_singles?: boolean; plays_doubles?: boolean };
 
 function endTime(duration: Duration) {
@@ -61,32 +52,27 @@ function showLocationError(error: unknown) {
   }
 }
 
+// Play: turn on Looking to Play, say what you want, and see who else is looking
+// for the same thing. Searching for people is on the Find people tab.
 export default function PlayScreen() {
   const { colors } = useTheme();
   const { demoMode, session } = useAuth();
+  const { profile } = useProfile();
   const userId = session?.user.id;
   const [looking, setLooking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [duration, setDuration] = useState<Duration>('2h');
-  const [skill, setSkill] = useState(skillRanges[0].label);
-  const [distance, setDistance] = useState(3);
-  const [format, setFormat] = useState<Format>('any');
-  const [showPrefs, setShowPrefs] = useState(false);
-  const [query, setQuery] = useState('');
+  const [settings, setSettings] = useState<PlaySettings | null>(defaultPlaySettings);
   const [location, setLocation] = useState<LatLng | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
-
-  useClearOnBlur(() => setQuery(''));
   const unread = useUnreadCount(!demoMode && Boolean(userId));
   const reloadUnread = unread.reload;
+
   useFocusEffect(
     useCallback(() => {
       reloadUnread();
     }, [reloadUnread]),
   );
-
-  const searching = query.trim().length >= 2;
-  const q = query.trim().toLowerCase();
 
   // Pick up where you left off: are you already looking, and where are you?
   useEffect(() => {
@@ -102,19 +88,31 @@ export default function PlayScreen() {
     getLocationIfAllowed().then(setLocation);
   }, [demoMode, userId]);
 
+  useEffect(() => {
+    fetchPlaySettings(demoMode, profile?.id).then(setSettings);
+  }, [demoMode, profile?.id]);
+
+  const changeSettings = async (next: Partial<PlaySettings>) => {
+    if (!settings) return;
+    const before = settings;
+    setSettings({ ...settings, ...next });
+    try {
+      if (profile) await savePlaySettings(demoMode, profile.id, next);
+    } catch (e) {
+      setSettings(before);
+      Alert.alert("Couldn't save", e instanceof Error ? e.message : 'Try again.');
+    }
+  };
+
+  // Show people who want what you want: singles, doubles, or either.
+  const format = !settings ? null : settings.plays_singles && settings.plays_doubles ? null : settings.plays_singles ? 'singles' : 'doubles';
+
   const loadNearby = useCallback(async () => {
     if (!supabase || !location) return;
-    const range = skillRanges.find((s) => s.label === skill)!;
-    const args = {
-      p_lat: location.lat,
-      p_lng: location.lng,
-      p_radius_miles: distance,
-      p_min_skill: range.min,
-      p_max_skill: range.max,
-    };
-    let res = await supabase.rpc('nearby_players', format === 'any' ? args : { ...args, p_format: format });
-    // The format filter needs the newest database update; fall back to no filter.
-    if (res.error && format !== 'any') res = await supabase.rpc('nearby_players', args);
+    const args = { p_lat: location.lat, p_lng: location.lng, p_radius_miles: nearbyRadius, p_min_skill: null, p_max_skill: null };
+    let res = await supabase.rpc('nearby_players', format ? { ...args, p_format: format } : args);
+    // The format filter needs the newer database update; fall back to no filter.
+    if (res.error && format) res = await supabase.rpc('nearby_players', args);
     setPlayers(
       (res.data ?? []).map(
         (p: { profile_id: string; display_name: string; username: string; skill_level: number | null; distance_miles: number; plays_singles?: boolean; plays_doubles?: boolean }) => ({
@@ -128,28 +126,11 @@ export default function PlayScreen() {
         }),
       ),
     );
-  }, [location, skill, distance, format]);
+  }, [location, format]);
 
   useEffect(() => {
-    if (!demoMode && !searching) loadNearby();
-  }, [demoMode, searching, loadNearby]);
-
-  useEffect(() => {
-    if (demoMode || !supabase || !searching) return;
-    const timer = setTimeout(async () => {
-      const { data } = await supabase!.rpc('search_players', { p_query: query.trim() });
-      setPlayers(
-        (data ?? []).map((p: { profile_id: string; display_name: string; username: string; skill_level: number | null }) => ({
-          id: p.profile_id,
-          name: p.display_name,
-          username: p.username,
-          skill: p.skill_level,
-          distance: null,
-        })),
-      );
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [demoMode, searching, query]);
+    if (!demoMode) loadNearby();
+  }, [demoMode, loadNearby]);
 
   const toggleLooking = async () => {
     if (demoMode || !supabase) {
@@ -182,16 +163,14 @@ export default function PlayScreen() {
   };
 
   const results: Player[] = demoMode
-    ? (searching ? nearbyPlayers.filter((p) => p.username.includes(q) || p.name.toLowerCase().includes(q)) : nearbyPlayers).map(
-        (p) => ({ id: p.id, name: p.name, username: p.username, skill: p.skill, distance: p.distance }),
-      )
+    ? nearbyPlayers.map((p) => ({ id: p.id, name: p.name, username: p.username, skill: p.skill, distance: p.distance }))
     : players;
+  const paged = usePaged(results, 5);
 
-  const emptyMessage = searching
-    ? `No player matches "${query.trim()}".`
-    : !demoMode && !location
+  const emptyMessage =
+    !demoMode && !location
       ? 'Tap Go to share your rough location and see who else is looking nearby.'
-      : 'Nobody nearby is looking right now. Turn on Looking to Play so others can find you.';
+      : 'Nobody nearby is looking for that right now. Check back soon, or find people on the Find people tab.';
 
   return (
     <Screen>
@@ -225,84 +204,45 @@ export default function PlayScreen() {
         </View>
         <Body size={13} tone="muted">
           {looking
-            ? 'You are on. Players nearby can see you (only a rough distance) and challenge you, and you show up in their search. Turn it off any time.'
-            : 'Turn this on when you want a game. Players nearby will see you and can send you challenges.'}
+            ? 'You are on. Players nearby can see you and challenge you.'
+            : 'Turn this on when you want a game. Players nearby can see you and challenge you.'}
         </Body>
+        {settings ? <LookingFor settings={settings} onChange={changeSettings} /> : null}
         {!looking ? <Segmented accent value={duration} onChange={setDuration} options={durations.map(({ value, label }) => ({ value, label }))} /> : null}
       </Card>
 
-      <InfoDrop title="How does Looking to Play work?">
-        <Body size={13} tone="muted">
-          Tap Go and your rough location is shared so players nearby can find you. It turns itself off when your time is up, or tap Turn off.
-        </Body>
-        <Body size={13} tone="muted">
-          While it&apos;s on you are looking for challenges and players to play with nearby. Tap anyone below to challenge them, or search a username to find someone specific.
-        </Body>
-        <Body size={13} tone="muted">
-          Other players only ever see a rough distance, never your exact spot.
-        </Body>
-      </InfoDrop>
-
-      <Card style={{ padding: 16, gap: 12 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flex: 1 }}>
-            <Heading size={14} style={{ letterSpacing: 1 }}>
-              WHAT YOU&apos;RE OPEN TO
-            </Heading>
-            <Body size={13} tone="muted">
-              Singles, doubles, and who can challenge you
-            </Body>
-          </View>
-          <Button label={showPrefs ? 'Done' : 'Change'} variant="outline" size="sm" onPress={() => setShowPrefs(!showPrefs)} />
-        </View>
-        {showPrefs ? <PlayPrefs /> : null}
-      </Card>
-
-      <SearchField label="Find a player" placeholder="Search by username" value={query} onChangeText={setQuery} />
-
-      {!searching ? (
-        <View style={{ gap: 8 }}>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {skillRanges.map((s) => (
-              <Chip key={s.label} label={s.label} selected={s.label === skill} onPress={() => setSkill(s.label)} />
-            ))}
-          </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {(['any', 'singles', 'doubles'] as Format[]).map((f) => (
-              <Chip key={f} label={f === 'any' ? 'Singles or doubles' : f === 'singles' ? 'Singles' : 'Doubles'} selected={f === format} onPress={() => setFormat(f)} />
-            ))}
-          </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            {distances.map((d) => (
-              <Chip key={d} label={`Within ${d} mi`} selected={d === distance} onPress={() => setDistance(d)} />
-            ))}
-          </View>
-        </View>
-      ) : null}
-
-      <SkillGuide title="WHAT DO THE RATINGS MEAN?" intro={ratingIntro} />
-
       <View style={{ gap: 10 }}>
-        <SectionHeader title={searching ? 'Players' : 'Looking to play nearby'} detail={`${results.length} found`} />
+        <SectionHeader title="Looking for the same" detail={`${results.length} nearby`} />
         {results.length === 0 ? (
           <Card style={{ padding: 16 }}>
             <Body tone="muted">{emptyMessage}</Body>
           </Card>
         ) : (
-          results.map((player) => (
+          paged.shown.map((player) => (
             <Link key={player.id} href={{ pathname: '/player/[id]', params: { id: player.id, distance: player.distance ?? '' } }} asChild>
               <Pressable accessibilityRole="link">
                 <ListRow
                   left={<Avatar initials={initialsOf(player.name)} />}
                   title={player.name}
                   subtitle={[`@${player.username}`, skillLabel(player.skill), player.distance, formatTags(player)].filter(Boolean).join(' · ')}
-                  right={<Body tone="accent" weight="bold" size={14}>Challenge</Body>}
+                  right={
+                    <Body tone="accent" weight="bold" size={14}>
+                      Challenge
+                    </Body>
+                  }
                 />
               </Pressable>
             </Link>
           ))
         )}
+        <ShowMore hasMore={paged.hasMore} remaining={paged.remaining} onPress={paged.more} />
       </View>
+
+      <Link href="/friends" asChild>
+        <Button label="Find more people to play" variant="outline" />
+      </Link>
+
+      <HelpFooter />
     </Screen>
   );
 }

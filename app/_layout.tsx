@@ -112,6 +112,9 @@ function RootLayoutNav() {
           <Stack.Screen name="player/[id]" options={{ title: 'Player' }} />
           <Stack.Screen name="settings" options={{ title: 'Settings', presentation: 'modal' }} />
           <Stack.Screen name="notifications" options={{ title: 'Alerts' }} />
+          <Stack.Screen name="help" options={{ title: 'How Sickle works' }} />
+          <Stack.Screen name="my-teams" options={{ title: 'My teams' }} />
+          <Stack.Screen name="my-friends" options={{ title: 'My friends' }} />
           <Stack.Screen name="welcome" options={{ title: 'Welcome', presentation: 'modal' }} />
         </Stack.Protected>
         <Stack.Protected guard={signedIn && !hasProfile}>

@@ -2,10 +2,11 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
-import { Avatar, Body, Button, Card, Field, Heading, InfoDrop, ListRow, Screen, SearchField } from '@/components/ui';
+import { Avatar, Body, Button, Card, Field, Heading, ListRow, Screen, SearchField } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { fetchFriends, FriendRow } from '@/lib/friends';
+import { fetchMyTeams } from '@/lib/matches';
 import { supabase } from '@/lib/supabase';
 
 type Person = { id: string; name: string; username: string };
@@ -20,6 +21,8 @@ export default function NewTeamScreen() {
   const [partner, setPartner] = useState<Person | null>(null);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  // Friends you already have a team with. One team per pair.
+  const [taken, setTaken] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchFriends(demoMode).then((f) => {
@@ -29,6 +32,10 @@ export default function NewTeamScreen() {
       if (preset) setPartner({ id: preset.id, name: preset.name, username: preset.username });
     });
   }, [demoMode, partnerParam]);
+
+  useEffect(() => {
+    fetchMyTeams(demoMode).then((t) => setTaken(new Set(t.filter((x) => !x.is_singles && x.partner_id).map((x) => x.partner_id as string))));
+  }, [demoMode]);
 
   const q = query.trim().toLowerCase();
   const shown = (friends ?? []).filter((f) => !q || f.name.toLowerCase().includes(q) || f.username.toLowerCase().includes(q));
@@ -52,10 +59,6 @@ export default function NewTeamScreen() {
   return (
     <Screen>
       <Body tone="muted">A team is you and one friend. Pick who you want to play doubles with.</Body>
-      <InfoDrop title="Why only friends?">
-        Teams are only with people you are friends with, so nobody can put you on a team without you knowing them. Add someone as a friend first, then come back here.
-      </InfoDrop>
-
       {partner ? (
         <Card style={{ padding: 16, gap: 12 }} highlighted>
           <ListRow left={<Avatar initials={initialsOf(partner.name)} size={40} />} title={partner.name} subtitle={`@${partner.username}`} />
@@ -79,7 +82,15 @@ export default function NewTeamScreen() {
               left={<Avatar initials={initialsOf(f.name)} size={40} />}
               title={f.name}
               subtitle={`@${f.username}`}
-              right={<Button label="Pick" size="sm" onPress={() => setPartner({ id: f.id, name: f.name, username: f.username })} />}
+              right={
+                taken.has(f.id) ? (
+                  <Body size={13} tone="muted">
+                    Already a team
+                  </Body>
+                ) : (
+                  <Button label="Pick" size="sm" onPress={() => setPartner({ id: f.id, name: f.name, username: f.username })} />
+                )
+              }
             />
           ))}
           {shown.length === 0 ? <Body tone="muted">No friend matches that.</Body> : null}

@@ -45,7 +45,27 @@ insert into ids select 't', public.create_team('00000000-0000-0000-0000-00000000
 do $$ begin
   assert (select players from public.team_players(array[(select v from ids where k = 't')])) = 'Zed One and Zed Two', 'players under the name';
 end $$;
+-- Round 3: no second team with the same person, and names are permanent.
+select pg_temp.expect_error($$select public.create_team('00000000-0000-0000-0000-00000000cc02', 'Again')$$, 'You already have a team with Zed');
+select pg_temp.expect_error($$update public.profiles set display_name = 'New Name' where id = auth.uid()$$, 'permission denied');
+select pg_temp.expect_error($$update public.profiles set username = 'newname' where id = auth.uid()$$, 'permission denied');
+update public.profiles set skill_level = 3.5 where id = auth.uid();
+
 select pg_temp.expect_error($$select public.create_team('00000000-0000-0000-0000-00000000cc03')$$, 'You can only make a team with a friend');
+
+-- Find people: browse by skill and format, never friends or yourself.
+reset role;
+update public.profiles set skill_level = 3.0, plays_singles = true, plays_doubles = false where id = '00000000-0000-0000-0000-00000000cc03';
+update public.profiles set skill_level = 3.5 where id = '00000000-0000-0000-0000-00000000cc01';
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000cc01';
+do $$ begin
+  assert exists (select 1 from public.browse_players() where username::text = 'rtwothree'), 'sees non friends';
+  assert not exists (select 1 from public.browse_players() where username::text in ('rtwoone', 'rtwotwo')), 'not me or friends';
+  assert exists (select 1 from public.browse_players(3.0, 3.99, 'singles') where username::text = 'rtwothree'), 'filter match';
+  assert not exists (select 1 from public.browse_players(null, null, 'doubles') where username::text = 'rtwothree'), 'format filter';
+  assert not exists (select 1 from public.browse_players(4.0, null, null) where username::text = 'rtwothree'), 'skill filter';
+end $$;
 
 -- Private courts: not within 200 feet (about 61 m) of a public court, fine beyond it.
 select pg_temp.expect_error($$select public.create_private_court('Too close', 12.0003, -100.0, null, 1)$$, 'A public court is already there');

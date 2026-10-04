@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
 import { TeamPick } from '@/components/TeamPick';
-import { Body, Button, Card, Chip, Heading, InfoDrop, Screen } from '@/components/ui';
+import { Body, Button, Card, Chip, Heading, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { courtsNear, nearbyMiles, useCourts } from '@/lib/courts';
 import { formatMiles } from '@/lib/format';
@@ -170,9 +170,6 @@ export default function NewChallengeScreen() {
               onPress={() => setMyTeam(t.team_id)}
             />
           ))}
-          <InfoDrop title="Why do I pick a team?">
-            In doubles a challenge is team against team. Pick the team of yours that will play, and the team above is the one you are challenging.
-          </InfoDrop>
         </View>
       )}
 

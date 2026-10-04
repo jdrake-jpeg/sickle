@@ -96,13 +96,14 @@ function RootLayoutNav() {
           <Stack.Screen name="score/[challengeId]" options={{ title: 'Enter score' }} />
           <Stack.Screen name="court/[id]" options={{ title: 'Court' }} />
           <Stack.Screen name="court/new" options={{ title: 'Add a court' }} />
-          <Stack.Screen name="friends/index" options={{ title: 'Friends' }} />
-          <Stack.Screen name="friends/[id]" options={{ title: 'Friend' }} />
+          <Stack.Screen name="friends/[id]" options={{ title: 'Games and ratings' }} />
+          <Stack.Screen name="chat/[id]" options={{ title: 'Chat' }} />
           <Stack.Screen name="challenge/new" options={{ title: 'Send a challenge' }} />
           <Stack.Screen name="ratings" options={{ title: 'Your private ratings' }} />
           <Stack.Screen name="profile-edit" options={{ title: 'Edit profile' }} />
           <Stack.Screen name="rules" options={{ title: 'Pickleball rules' }} />
           <Stack.Screen name="team/new" options={{ title: 'New team' }} />
+          <Stack.Screen name="team/[id]" options={{ title: 'Team' }} />
           <Stack.Screen name="admin/courts" options={{ title: 'Review courts' }} />
           <Stack.Screen name="admin/admins" options={{ title: 'Manage admins' }} />
           <Stack.Screen name="player/[id]" options={{ title: 'Player' }} />

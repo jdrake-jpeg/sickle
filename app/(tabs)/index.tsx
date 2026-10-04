@@ -186,9 +186,6 @@ export default function PlayScreen() {
     <Screen>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44 }}>
         <LogoWordmark width={130} />
-        <Link href="/friends" asChild>
-          <Button label="Friends" variant="outline" size="sm" />
-        </Link>
       </View>
 
       <Card style={{ padding: 16, gap: 14, borderRadius: 20 }}>

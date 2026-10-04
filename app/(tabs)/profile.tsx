@@ -45,9 +45,6 @@ export default function ProfileScreen() {
           @{profile?.username}
         </Body>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Link href="/friends" asChild>
-            <Button label="Friends" variant="outline" size="sm" />
-          </Link>
           <Link href="/profile-edit" asChild>
             <Button label="Edit" variant="outline" size="sm" />
           </Link>

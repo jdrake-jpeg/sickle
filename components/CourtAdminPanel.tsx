@@ -4,17 +4,18 @@ import { Alert, View } from 'react-native';
 
 import { CourtMap } from '@/components/CourtMap';
 import { Body, Button, Card, Field, SectionHeader, Segmented } from '@/components/ui';
-import { adminRemoveCourt, adminUpdateCourt, Court } from '@/lib/courts';
+import { adminRemoveCourt, adminSetCourtNote, adminUpdateCourt, Court } from '@/lib/courts';
 import { LatLng } from '@/lib/location';
 
 type Setting = 'outdoor' | 'indoor';
 
-// The edit and remove functions come from database update 20261006. Until
-// it's run in Supabase, say so instead of showing a raw database error.
+// The edit, remove and note functions come from database updates 20261006 and
+// 20261009. Until they're run in Supabase, say so instead of showing a raw
+// database error.
 function problem(e: unknown) {
   const err = e as { code?: string; message?: string } | null;
   if (err?.code === 'PGRST202' || /could not find the function/i.test(err?.message ?? '')) {
-    return 'The database update for editing courts isn\'t in Supabase yet. Run the 20261006 file in the SQL Editor, then try again.';
+    return "A database update for editing courts isn't in Supabase yet. Run the newest files from supabase/migrations in the SQL Editor (oldest first), then try again.";
   }
   return err?.message || 'Try again.';
 }
@@ -27,11 +28,13 @@ export function CourtAdminPanel({ court, demoMode, onSaved }: { court: Court; de
   const [count, setCount] = useState(court.court_count ? String(court.court_count) : '');
   const [setting, setSetting] = useState<Setting>(court.indoor ? 'indoor' : 'outdoor');
   const [pin, setPin] = useState<LatLng>({ lat: court.lat, lng: court.lng });
+  const [adminNote, setAdminNote] = useState(court.admin_note ?? '');
   const [busy, setBusy] = useState(false);
 
   const startEditing = () => {
     setName(court.name);
     setAddress(court.address ?? '');
+    setAdminNote(court.admin_note ?? '');
     setCount(court.court_count ? String(court.court_count) : '');
     setSetting(court.indoor ? 'indoor' : 'outdoor');
     setPin({ lat: court.lat, lng: court.lng });
@@ -54,6 +57,10 @@ export function CourtAdminPanel({ court, demoMode, onSaved }: { court: Court; de
         lat: pin.lat,
         lng: pin.lng,
       });
+      // Only touch the note when it changed, so editing other details works
+      // even before the notes update is in the database.
+      const noteChanged = adminNote.trim() !== (court.admin_note ?? '');
+      if (noteChanged) await adminSetCourtNote(demoMode, court.id, adminNote);
       onSaved({
         ...court,
         name: name.trim(),
@@ -62,6 +69,7 @@ export function CourtAdminPanel({ court, demoMode, onSaved }: { court: Court; de
         indoor: setting === 'indoor',
         lat: pin.lat,
         lng: pin.lng,
+        admin_note: adminNote.trim() || null,
       });
       setEditing(false);
     } catch (e) {
@@ -105,6 +113,15 @@ export function CourtAdminPanel({ court, demoMode, onSaved }: { court: Court; de
           <Field label="Name" value={name} onChangeText={setName} maxLength={60} />
           <Field label="Address (optional)" value={address} onChangeText={setAddress} maxLength={120} />
           <Field label="Number of courts" placeholder="4" keyboardType="number-pad" value={count} onChangeText={setCount} maxLength={2} />
+          <Field
+            label="Permanent note (everyone sees it)"
+            placeholder="Park on the north side. Courts close at 10."
+            value={adminNote}
+            onChangeText={setAdminNote}
+            maxLength={300}
+            multiline
+            style={{ height: 88, paddingTop: 12, textAlignVertical: 'top' }}
+          />
           <Segmented<Setting>
             value={setting}
             onChange={setSetting}

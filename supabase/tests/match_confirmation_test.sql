@@ -37,6 +37,11 @@ begin
   raise exception 'Expected error "%" but the statement succeeded: %', p_expected, p_sql;
 end $$;
 
+-- Teams are friends only.
+insert into public.friendships (requester_id, addressee_id, status, accepted_at) values
+  ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000b', 'accepted', now()),
+  ('00000000-0000-0000-0000-00000000000c', '00000000-0000-0000-0000-00000000000d', 'accepted', now());
+
 set role authenticated;
 
 -- Teams: Drake + Jack, Ty + Ryan.

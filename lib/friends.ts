@@ -60,3 +60,25 @@ export async function removeFriend(demoMode: boolean, profileId: string) {
 export function relationLabel(relation: Relation) {
   return relation === 'friend' ? 'Friends' : relation === 'outgoing' ? 'Requested' : relation === 'incoming' ? 'Accept' : 'Add friend';
 }
+
+// People at about your skill level who aren't your friends yet. Needs the
+// 20261013 database update (and a skill level set), otherwise it's empty.
+export type SimilarPlayer = FriendRow & { lookingNow: boolean; plays_singles: boolean; plays_doubles: boolean };
+
+export async function fetchSimilarPlayers(demoMode: boolean, format: 'singles' | 'doubles' | null): Promise<SimilarPlayer[]> {
+  if (demoMode || !supabase) {
+    return [{ id: 'p3', name: 'Marcus Bell', username: 'mbell', skill: 4.0, relation: null, lookingNow: true, plays_singles: true, plays_doubles: true }];
+  }
+  const { data, error } = await supabase.rpc('similar_players', format ? { p_format: format } : {});
+  if (error) return [];
+  return ((data ?? []) as (DbPerson & { looking_now: boolean; plays_singles: boolean; plays_doubles: boolean })[]).map((p) => ({
+    id: p.profile_id,
+    name: p.display_name,
+    username: p.username,
+    skill: p.skill_level,
+    relation: null,
+    lookingNow: p.looking_now,
+    plays_singles: p.plays_singles,
+    plays_doubles: p.plays_doubles,
+  }));
+}

@@ -1,53 +1,37 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
-import { Avatar, Body, Button, Card, Chip, Field, Heading, ListRow, Screen } from '@/components/ui';
+import { Avatar, Body, Button, Card, Field, Heading, InfoDrop, ListRow, Screen, SearchField } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { fetchFriends, FriendRow } from '@/lib/friends';
-import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 
 type Person = { id: string; name: string; username: string };
 
-// Make a two-person team: pick a partner (a friend, or search anyone), name
-// it if you want, done. Teams are what challenge other teams.
+// Make a two-person team with a friend. Friends only, so nobody gets put on a
+// team by a stranger.
 export default function NewTeamScreen() {
   const { demoMode } = useAuth();
-  const [friends, setFriends] = useState<FriendRow[]>([]);
+  const { partner: partnerParam } = useLocalSearchParams<{ partner?: string }>();
+  const [friends, setFriends] = useState<FriendRow[] | null>(null);
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Person[]>([]);
   const [partner, setPartner] = useState<Person | null>(null);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    fetchFriends(demoMode).then((f) => setFriends(f.filter((x) => x.relation === 'friend')));
-  }, [demoMode]);
+    fetchFriends(demoMode).then((f) => {
+      const accepted = f.filter((x) => x.relation === 'friend');
+      setFriends(accepted);
+      const preset = partnerParam ? accepted.find((x) => x.id === partnerParam) : null;
+      if (preset) setPartner({ id: preset.id, name: preset.name, username: preset.username });
+    });
+  }, [demoMode, partnerParam]);
 
-  const q = query.trim();
-  useEffect(() => {
-    if (q.length < 2) {
-      setResults([]);
-      return;
-    }
-    if (demoMode || !supabase) {
-      setResults(nearbyPlayers.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()) || p.username.includes(q.toLowerCase())));
-      return;
-    }
-    const timer = setTimeout(async () => {
-      const { data } = await supabase!.rpc('search_players', { p_query: q });
-      setResults(
-        ((data ?? []) as { profile_id: string; display_name: string; username: string }[]).map((p) => ({
-          id: p.profile_id,
-          name: p.display_name,
-          username: p.username,
-        })),
-      );
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [q, demoMode]);
+  const q = query.trim().toLowerCase();
+  const shown = (friends ?? []).filter((f) => !q || f.name.toLowerCase().includes(q) || f.username.toLowerCase().includes(q));
 
   const create = async () => {
     if (!partner) return;
@@ -61,13 +45,16 @@ export default function NewTeamScreen() {
         return;
       }
     }
-    Alert.alert('Team made', `${teamName} is ready. Challenge a team from a court leaderboard or a player's page.`);
+    Alert.alert('Team made', `${teamName} is ready. Pick it when you challenge another team.`);
     router.back();
   };
 
   return (
     <Screen>
-      <Body tone="muted">Teams are two players. Pick your partner.</Body>
+      <Body tone="muted">A team is you and one friend. Pick who you want to play doubles with.</Body>
+      <InfoDrop title="Why only friends?">
+        Teams are only with people you are friends with, so nobody can put you on a team without you knowing them. Add someone as a friend first, then come back here.
+      </InfoDrop>
 
       {partner ? (
         <Card style={{ padding: 16, gap: 12 }} highlighted>
@@ -76,37 +63,27 @@ export default function NewTeamScreen() {
           <Button label={busy ? 'Making it…' : 'Make the team'} size="lg" disabled={busy} onPress={create} />
           <Button label="Pick someone else" variant="ghost" onPress={() => setPartner(null)} />
         </Card>
+      ) : friends === null ? null : friends.length === 0 ? (
+        <Card style={{ padding: 16, gap: 10 }}>
+          <Heading>ADD A FRIEND FIRST</Heading>
+          <Body tone="muted">You don&apos;t have any friends on Sickle yet. Find a player and send a friend request. Once they accept you can team up.</Body>
+          <Button label="Find friends" onPress={() => router.replace('/friends')} />
+        </Card>
       ) : (
-        <>
-          {friends.length > 0 ? (
-            <View style={{ gap: 8 }}>
-              <Heading size={14}>YOUR FRIENDS</Heading>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {friends.map((f) => (
-                  <Chip key={f.id} label={f.name} onPress={() => setPartner({ id: f.id, name: f.name, username: f.username })} />
-                ))}
-              </View>
-            </View>
-          ) : null}
-          <Field label="Search any player" placeholder="Name or username" autoCapitalize="none" autoCorrect={false} value={query} onChangeText={setQuery} />
-          {results.map((p) => (
+        <View style={{ gap: 8 }}>
+          <Heading size={14}>YOUR FRIENDS</Heading>
+          {friends.length > 5 ? <SearchField label="Search your friends" placeholder="Name or username" value={query} onChangeText={setQuery} /> : null}
+          {shown.map((f) => (
             <ListRow
-              key={p.id}
-              left={<Avatar initials={initialsOf(p.name)} size={40} />}
-              title={p.name}
-              subtitle={`@${p.username}`}
-              right={<Button label="Pick" size="sm" onPress={() => setPartner(p)} />}
+              key={f.id}
+              left={<Avatar initials={initialsOf(f.name)} size={40} />}
+              title={f.name}
+              subtitle={`@${f.username}`}
+              right={<Button label="Pick" size="sm" onPress={() => setPartner({ id: f.id, name: f.name, username: f.username })} />}
             />
           ))}
-          {q.length >= 2 && results.length === 0 ? (
-            <Card style={{ padding: 16 }}>
-              <Body tone="muted">
-                Nobody matches &ldquo;{q}&rdquo;. Your partner needs a Sickle account first. Testing alone? Make a second account in your
-                Mac&apos;s web browser.
-              </Body>
-            </Card>
-          ) : null}
-        </>
+          {shown.length === 0 ? <Body tone="muted">No friend matches that.</Body> : null}
+        </View>
       )}
     </Screen>
   );

@@ -7,8 +7,8 @@ import { DraftScores, fromGameScores, ScoreEntry, toGameScores } from '@/compone
 import { Body, Button, Card, Field, Heading, Screen } from '@/components/ui';
 import { fonts } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
-import { confirmResult, disputeResult, formatWhen, matchStatusText, timeAgo, useChallenges } from '@/lib/matches';
-import { checkBestOfThree, GameScore } from '@/lib/scores';
+import { bestOfOf, confirmResult, disputeResult, formatWhen, matchStatusText, timeAgo, useChallenges } from '@/lib/matches';
+import { checkMatch, GameScore, matchLengthLabel } from '@/lib/scores';
 import { useTheme } from '@/lib/theme';
 
 // One match, opened by its challenge id. If the score is waiting on you,
@@ -38,6 +38,7 @@ export default function MatchScreen() {
   }
 
   const games: GameScore[] = row.games;
+  const bestOf = bestOfOf(row);
   const r = { teamA: row.my_team_name, teamB: row.their_team_name, games };
   const winsA = games.filter(([a, b]) => a > b).length;
   const winsB = games.length - winsA;
@@ -58,8 +59,8 @@ export default function MatchScreen() {
   };
 
   const sendCorrection = async () => {
-    const next = toGameScores(draft ?? fromGameScores(games));
-    const check = checkBestOfThree(next);
+    const next = toGameScores(draft ?? fromGameScores(games, bestOf));
+    const check = checkMatch(next, bestOf);
     if (!check.ok) return setError(check.error);
     if (JSON.stringify(next) === JSON.stringify(games)) return setError('That is the same score. Confirm it instead.');
     setError(null);
@@ -89,7 +90,7 @@ export default function MatchScreen() {
             Enter the score you think is right. {r.teamB} can accept it or send one more correction. If you still don&apos;t agree, an admin decides.
           </Body>
         </Card>
-        <ScoreEntry teamA={r.teamA} teamB={r.teamB} value={draft ?? fromGameScores(games)} onChange={setDraft} />
+        <ScoreEntry teamA={r.teamA} teamB={r.teamB} value={draft ?? fromGameScores(games, bestOf)} onChange={setDraft} />
         <Field label="Note (optional)" placeholder="We won game 3 11–8" value={note} onChangeText={setNote} maxLength={500} />
         {error ? (
           <Body tone="danger" weight="semibold">
@@ -124,7 +125,7 @@ export default function MatchScreen() {
             {row.court_name}
           </Body>
           <Body size={13} tone="muted">
-            {formatWhen(row.played_at ?? row.proposed_time)}
+            {matchLengthLabel(bestOf)} · {formatWhen(row.played_at ?? row.proposed_time)}
           </Body>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>

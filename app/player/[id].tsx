@@ -1,13 +1,16 @@
 import { Link, Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 
+import { ChallengeBuilder } from '@/components/ChallengeBuilder';
+import { HistoryList } from '@/components/HistoryList';
 import { tierOf } from '@/components/SkillPicker';
-import { Avatar, Body, Button, Card, Display, Field, Heading, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
+import { Avatar, Body, Button, Card, Display, Field, Heading, InfoDrop, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { addFriend, fetchRelation, Relation, relationLabel, removeFriend } from '@/lib/friends';
-import { fetchMyTeams, fetchPlayerTeams, TeamRow } from '@/lib/matches';
+import { fetchMyTeams, fetchPlayerHistory, fetchPlayerTeams, HistoryRow, TeamRow, useTeamPlayers } from '@/lib/matches';
+import { Crown, crownText, fetchPlayerCrowns, fetchPlayerOpen, formatTags, PlayerOpen } from '@/lib/play';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 
@@ -29,6 +32,10 @@ export default function PlayerScreen() {
   const [relation, setRelation] = useState<Relation>(null);
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [teamsVersion, setTeamsVersion] = useState(0);
+  const [showTeams, setShowTeams] = useState(false);
+  const [history, setHistory] = useState<HistoryRow[] | null>(null);
+  const [open, setOpen] = useState<PlayerOpen | null>(null);
+  const [crowns, setCrowns] = useState<Crown[]>([]);
   const [stats, setStats] = useState<{ wins: number | null; losses: number | null; hidden: boolean } | null>(null);
 
   // Their record, unless they've hidden it in Settings.
@@ -47,6 +54,14 @@ export default function PlayerScreen() {
       setTeams(theirs.filter((t) => !myIds.has(t.team_id)));
     });
   }, [demoMode, id, teamsVersion]);
+
+  const teamPlayers = useTeamPlayers(demoMode, teams);
+
+  useEffect(() => {
+    fetchPlayerHistory(demoMode, id).then(setHistory);
+    fetchPlayerOpen(demoMode, id).then(setOpen);
+    fetchPlayerCrowns(demoMode, id).then(setCrowns);
+  }, [demoMode, id]);
 
   useEffect(() => {
     fetchRelation(demoMode, id).then(setRelation);
@@ -90,7 +105,7 @@ export default function PlayerScreen() {
     const name = teamName.trim();
     const ok = await run(() => supabase!.rpc('create_team', { p_partner: player.id, p_name: name || null }));
     if (!ok) return;
-    Alert.alert('Team created', `${name || `You + ${firstName}`} is ready. Challenge a team from a court leaderboard or a player's page.`);
+    Alert.alert('Team created', `${name || `You + ${firstName}`} is ready. Pick it when you challenge another team.`);
     setTeamName('');
     setTeamsVersion((v) => v + 1);
   };
@@ -144,13 +159,32 @@ export default function PlayerScreen() {
       <Stack.Screen options={{ title: `@${player.username}` }} />
       <View style={{ alignItems: 'center', gap: 8, paddingTop: 8 }}>
         <Avatar initials={initialsOf(player.name)} size={88} />
-        <Display size={26}>{player.name.toUpperCase()}</Display>
+        <Pressable
+          accessibilityRole={crowns.length ? 'button' : undefined}
+          disabled={crowns.length === 0}
+          onPress={() => Alert.alert(`${player.name} is a Court Champ`, crowns.map(crownText).join('\n'))}>
+          <Display size={26} style={{ textAlign: 'center' }}>
+            {crowns.length ? '👑 ' : ''}
+            {player.name.toUpperCase()}
+          </Display>
+        </Pressable>
+        {crowns.length ? (
+          <Body size={13} tone="muted">
+            Court Champ at {crowns.map((c) => c.court_name).join(', ')}
+          </Body>
+        ) : null}
         <Body tone="muted">
           {[`@${player.username}`, player.skill ? `${Number(player.skill).toFixed(1)} ${tierOf(Number(player.skill))}` : null, distance ? `${distance} away` : null]
             .filter(Boolean)
             .join(' · ')}
         </Body>
+        {open ? (
+          <Body size={13} tone="muted">
+            {[formatTags(open), !open.can_friend && relation === null ? `Not taking friend requests` : null].filter(Boolean).join(' · ')}
+          </Body>
+        ) : null}
         <Button
+          disabled={Boolean(open && !open.can_friend && relation === null)}
           label={relation === 'friend' ? 'Friends ✓' : relation === 'incoming' ? 'Accept friend request' : relationLabel(relation)}
           variant={relation === 'incoming' || relation === null ? 'primary' : 'outline'}
           size="sm"
@@ -181,29 +215,51 @@ export default function PlayerScreen() {
         </Link>
       ) : null}
 
-      {teams.length > 0 ? (
+      <ChallengeBuilder
+        playerId={player.id}
+        firstName={firstName}
+        blocked={Boolean(open && !open.can_challenge)}
+        blockedNote={open?.challenge_note}
+      />
+
+      <View style={{ gap: 8 }}>
+        <Button label={showTeams ? 'Hide player teams' : 'Player teams'} variant="outline" onPress={() => setShowTeams(!showTeams)} />
+        {showTeams ? (
+          teams.length === 0 ? (
+            <Body tone="muted">{firstName} isn&apos;t on any teams yet.</Body>
+          ) : (
+            teams.map((t) => (
+              <Link key={t.team_id} href={{ pathname: '/team/[id]', params: { id: t.team_id } }} asChild>
+                <Pressable accessibilityRole="link">
+                  <ListRow
+                    title={t.is_singles ? 'Singles' : t.team_name}
+                    subtitle={[t.is_singles ? null : teamPlayers[t.team_id], `${t.wins}–${t.losses} · tap for history`].filter(Boolean).join('\n')}
+                  />
+                </Pressable>
+              </Link>
+            ))
+          )
+        ) : null}
+      </View>
+
+      {stats && !(stats.hidden && stats.wins == null) ? (
         <View style={{ gap: 8 }}>
-          <SectionHeader title={`${firstName}'s teams`} />
-          {teams.map((t) => (
-            <ListRow
-              key={t.team_id}
-              title={t.team_name}
-              subtitle={`${t.wins}–${t.losses}`}
-              right={
-                <Link href={{ pathname: '/challenge/new', params: { team: t.team_id, teamName: t.team_name } }} asChild>
-                  <Button label="Challenge" variant="dangerOutline" size="sm" />
-                </Link>
-              }
-            />
-          ))}
+          <SectionHeader title={`${firstName}'s matches`} />
+          <HistoryList rows={history} empty={`${firstName} hasn't played a confirmed match yet.`} />
         </View>
       ) : null}
 
-      <Card style={{ padding: 16, gap: 12 }}>
-        <Heading>TEAM UP WITH {firstName.toUpperCase()}</Heading>
-        <Field label="Team name (optional)" placeholder={`You + ${firstName}`} value={teamName} onChangeText={setTeamName} maxLength={40} />
-        <Button label="Create team" disabled={busy} onPress={createTeam} />
-      </Card>
+      {relation === 'friend' ? (
+        <Card style={{ padding: 16, gap: 12 }}>
+          <Heading>TEAM UP WITH {firstName.toUpperCase()}</Heading>
+          <Field label="Team name (optional)" placeholder={`You + ${firstName}`} value={teamName} onChangeText={setTeamName} maxLength={40} />
+          <Button label="Create team" variant="outline" disabled={busy} onPress={createTeam} />
+        </Card>
+      ) : (
+        <InfoDrop title={`Want to team up with ${firstName}?`}>
+          Teams are only with friends. Add {firstName} as a friend first. Once they accept, you can make a doubles team here.
+        </InfoDrop>
+      )}
 
       {reporting ? (
         <Card style={{ padding: 16, gap: 12 }}>

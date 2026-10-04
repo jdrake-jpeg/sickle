@@ -36,6 +36,11 @@ create temp table rids (k text primary key, v uuid);
 grant all on rids to authenticated;
 create function pg_temp.r(p_k text) returns uuid language sql as $$ select v from rids where k = p_k $$;
 
+-- Teams are friends only.
+insert into public.friendships (requester_id, addressee_id, status, accepted_at) values
+  ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000b2', 'accepted', now()),
+  ('00000000-0000-0000-0000-0000000000b3', '00000000-0000-0000-0000-0000000000b4', 'accepted', now());
+
 set role authenticated;
 
 -- Amy + Bo challenge Cy + Di; Cy accepts; Amy enters the score.

@@ -1,7 +1,7 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
-import { GameScore } from '@/lib/scores';
+import { BestOf, GameScore } from '@/lib/scores';
 import { supabase } from '@/lib/supabase';
 
 // Challenges, matches, teams and private ratings. Every write goes through a
@@ -30,9 +30,23 @@ export type ChallengeRow = {
   games: GameScore[] | null;
   submitted_by_name: string | null;
   played_at: string | null;
+  // One game or best of 3. Missing on a database from before update 20261010,
+  // which only had best of 3.
+  best_of?: BestOf;
 };
 
-export type TeamRow = { team_id: string; team_name: string; partner_id?: string; partner_name?: string; wins: number; losses: number };
+export const bestOfOf = (row: Pick<ChallengeRow, 'best_of'>): BestOf => (row.best_of === 1 ? 1 : 3);
+
+export type TeamRow = {
+  team_id: string;
+  team_name: string;
+  partner_id?: string | null;
+  partner_name?: string | null;
+  wins: number;
+  losses: number;
+  // Every player has one built in singles team. Missing on an older database.
+  is_singles?: boolean;
+};
 
 const hoursFromNow = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
 
@@ -67,8 +81,9 @@ const demoChallenges: ChallengeRow[] = [
 ];
 
 const demoTeams: TeamRow[] = [
-  { team_id: 'm1', team_name: 'You + Jack', partner_id: 'p1', partner_name: 'Jack Thompson', wins: 14, losses: 5 },
-  { team_id: 'm2', team_name: 'You + Tyler', partner_id: 'p4', partner_name: 'Tyler Kim', wins: 9, losses: 4 },
+  { team_id: 'm1', team_name: 'You + Jack', partner_id: 'p1', partner_name: 'Jack Thompson', wins: 14, losses: 5, is_singles: false },
+  { team_id: 's1', team_name: 'You', partner_id: null, partner_name: null, wins: 3, losses: 1, is_singles: true },
+  { team_id: 'm2', team_name: 'You + Tyler', partner_id: 'p4', partner_name: 'Tyler Kim', wins: 9, losses: 4, is_singles: false },
 ];
 
 // ---------------------------------------------------------------------------
@@ -152,12 +167,14 @@ export async function cancelChallenge(demoMode: boolean, id: string) {
 const toDbOrder = (row: ChallengeRow, mine: GameScore[]) =>
   row.i_challenged ? mine : mine.map(([a, b]) => [b, a] as GameScore);
 
-export async function submitScore(demoMode: boolean, row: ChallengeRow, mine: GameScore[]) {
+// courtId: where it was really played, if that isn't the planned court.
+export async function submitScore(demoMode: boolean, row: ChallengeRow, mine: GameScore[], courtId?: string, courtName?: string) {
+  const moved = courtId && courtId !== row.court_id ? courtId : undefined;
   if (demoMode || !supabase) {
     const wins = mine.filter(([a, b]) => a > b).length;
-    return demoUpdate(row.challenge_id, { match_id: 'demo-' + row.challenge_id, match_status: 'awaiting_confirmation', games: mine, i_won: wins >= 2, submitted_by_name: 'Drake', played_at: new Date().toISOString() });
+    return demoUpdate(row.challenge_id, { ...(moved ? { court_id: moved, court_name: courtName ?? row.court_name } : {}), match_id: 'demo-' + row.challenge_id, match_status: 'awaiting_confirmation', games: mine, i_won: wins * 2 > mine.length, submitted_by_name: 'Drake', played_at: new Date().toISOString() });
   }
-  await call('submit_match_result', { p_challenge: row.challenge_id, p_games: toDbOrder(row, mine) });
+  await call('submit_match_result', { p_challenge: row.challenge_id, p_games: toDbOrder(row, mine), ...(moved ? { p_court: moved } : {}) });
 }
 
 export async function confirmResult(demoMode: boolean, row: ChallengeRow) {
@@ -168,15 +185,22 @@ export async function confirmResult(demoMode: boolean, row: ChallengeRow) {
 // Returns the new match status: back to them, or to an admin.
 export async function disputeResult(demoMode: boolean, row: ChallengeRow, mine: GameScore[], note: string): Promise<MatchStatus> {
   if (demoMode || !supabase) {
-    demoUpdate(row.challenge_id, { games: mine, awaiting_me: false, i_won: mine.filter(([a, b]) => a > b).length >= 2 });
+    demoUpdate(row.challenge_id, { games: mine, awaiting_me: false, i_won: mine.filter(([a, b]) => a > b).length * 2 > mine.length });
     return 'awaiting_confirmation';
   }
   return (await call('dispute_match_result', { p_match: row.match_id, p_games: toDbOrder(row, mine), p_note: note.trim() || null })) as MatchStatus;
 }
 
-export async function sendChallenge(demoMode: boolean, myTeam: string, theirTeam: string, court: string, when: Date) {
+export async function sendChallenge(demoMode: boolean, myTeam: string, theirTeam: string, court: string, when: Date, bestOf: BestOf = 3) {
   if (demoMode || !supabase) return;
-  await call('send_challenge', { p_my_team: myTeam, p_their_team: theirTeam, p_court: court, p_time: when.toISOString() });
+  await call('send_challenge', {
+    p_my_team: myTeam,
+    p_their_team: theirTeam,
+    p_court: court,
+    p_time: when.toISOString(),
+    // Only sent for one game, so best of 3 challenges also work before update 20261010 is in the database.
+    ...(bestOf === 1 ? { p_best_of: 1 } : {}),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -185,14 +209,133 @@ export async function sendChallenge(demoMode: boolean, myTeam: string, theirTeam
 
 export async function fetchMyTeams(demoMode: boolean): Promise<TeamRow[]> {
   if (demoMode || !supabase) return demoTeams;
+  // Singles included. Falls back to doubles only if the singles update isn't in the database yet.
+  const all = await supabase.rpc('my_teams_all');
+  if (!all.error) return (all.data ?? []) as TeamRow[];
   const { data } = await supabase.rpc('my_teams');
   return (data ?? []) as TeamRow[];
 }
 
+// "Jack Thompson and Tyler Kim" for each team, to show under team names. Empty
+// on a database from before the round 2 update, so screens just skip the line.
+export async function fetchTeamPlayers(demoMode: boolean, teamIds: string[]): Promise<Record<string, string>> {
+  if (teamIds.length === 0) return {};
+  if (demoMode || !supabase) {
+    const out: Record<string, string> = {};
+    for (const id of teamIds) {
+      const t = demoTeams.find((x) => x.team_id === id);
+      out[id] = t ? (t.is_singles ? 'Just you' : `You and ${t.partner_name}`) : 'Two players';
+    }
+    return out;
+  }
+  const { data, error } = await supabase.rpc('team_players', { p_teams: teamIds });
+  if (error) return {};
+  const out: Record<string, string> = {};
+  for (const row of (data ?? []) as { team_id: string; players: string }[]) out[row.team_id] = row.players;
+  return out;
+}
+
+export function useTeamPlayers(demoMode: boolean, teams: { team_id: string }[]) {
+  const key = teams.map((t) => t.team_id).sort().join(',');
+  const [players, setPlayers] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let alive = true;
+    fetchTeamPlayers(demoMode, key ? key.split(',') : []).then((p) => alive && setPlayers(p));
+    return () => {
+      alive = false;
+    };
+  }, [demoMode, key]);
+  return players;
+}
+
 export async function fetchPlayerTeams(demoMode: boolean, profileId: string): Promise<TeamRow[]> {
   if (demoMode || !supabase) return [{ team_id: 't-' + profileId, team_name: 'Their team', wins: 3, losses: 2 }];
+  const all = await supabase.rpc('player_teams_all', { p_profile: profileId });
+  if (!all.error) return (all.data ?? []) as TeamRow[];
   const { data } = await supabase.rpc('player_teams', { p_profile: profileId });
   return (data ?? []) as TeamRow[];
+}
+
+// A confirmed match from one team's (or one player's) point of view.
+// Scores are [theirs, opponent's].
+export type HistoryRow = {
+  challenge_id: string;
+  played_at: string;
+  court_id: string;
+  court_name: string;
+  opponent_id: string;
+  opponent_name: string;
+  won: boolean;
+  games: GameScore[] | null;
+  best_of: BestOf | null;
+  // Only in a player's history: which team they played on, and with whom.
+  team_id?: string;
+  team_name?: string;
+  with_id?: string;
+  with_name?: string | null;
+  is_singles?: boolean;
+};
+
+export type TeamDetail = {
+  team_id: string;
+  team_name: string;
+  custom_name: string | null;
+  is_member: boolean;
+  wins: number;
+  losses: number;
+  members: { id: string; name: string; username: string }[];
+  is_singles?: boolean;
+};
+
+const demoHistory: HistoryRow[] = [
+  { challenge_id: 'h1', played_at: hoursFromNow(-30), court_id: 'porter', court_name: 'Porter Park', opponent_id: 't1', opponent_name: 'Kade + Mason', won: true, games: [[11, 7], [11, 9]], best_of: 3, team_id: 'm1', team_name: 'You + Jack', with_id: 'p1', with_name: 'Jack Thompson' },
+  { challenge_id: 'h2', played_at: hoursFromNow(-96), court_id: 'porter', court_name: 'Porter Park', opponent_id: 't4', opponent_name: 'Josh + Ben', won: false, games: [[8, 11]], best_of: 1, team_id: 'm1', team_name: 'You + Jack', with_id: 'p1', with_name: 'Jack Thompson' },
+];
+
+export async function fetchTeamDetail(demoMode: boolean, teamId: string): Promise<TeamDetail | null> {
+  if (demoMode || !supabase) {
+    const t = demoTeams.find((x) => x.team_id === teamId) ?? demoTeams[0];
+    return {
+      team_id: t.team_id,
+      team_name: t.team_name,
+      custom_name: null,
+      is_member: true,
+      wins: t.wins,
+      losses: t.losses,
+      members: [
+        { id: 'me', name: 'You', username: 'you' },
+        { id: t.partner_id ?? 'p1', name: t.partner_name ?? 'Partner', username: 'partner' },
+      ],
+    };
+  }
+  const { data } = await supabase.rpc('team_detail', { p_team: teamId });
+  return ((data ?? []) as TeamDetail[])[0] ?? null;
+}
+
+export async function fetchTeamHistory(demoMode: boolean, teamId: string): Promise<HistoryRow[]> {
+  if (demoMode || !supabase) return demoHistory;
+  const { data } = await supabase.rpc('team_history', { p_team: teamId });
+  return (data ?? []) as HistoryRow[];
+}
+
+export async function fetchPlayerHistory(demoMode: boolean, profileId: string): Promise<HistoryRow[]> {
+  if (demoMode || !supabase) return demoHistory;
+  const { data } = await supabase.rpc('player_history', { p_profile: profileId });
+  return (data ?? []) as HistoryRow[];
+}
+
+const missingUpdate = "Team editing isn't in the database yet. Run the newest files from supabase/migrations in the Supabase SQL Editor.";
+
+export async function renameTeam(demoMode: boolean, teamId: string, name: string): Promise<void> {
+  if (demoMode || !supabase) return;
+  const { error } = await supabase.rpc('update_team_name', { p_team: teamId, p_name: name });
+  if (error) throw new Error(error.code === 'PGRST202' ? missingUpdate : error.message);
+}
+
+export async function deleteTeam(demoMode: boolean, teamId: string): Promise<void> {
+  if (demoMode || !supabase) return;
+  const { error } = await supabase.rpc('delete_team', { p_team: teamId });
+  if (error) throw new Error(error.code === 'PGRST202' ? missingUpdate : error.message);
 }
 
 // ---------------------------------------------------------------------------

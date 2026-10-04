@@ -3,10 +3,11 @@ import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { tierOf } from '@/components/SkillPicker';
-import { Avatar, Body, Button, Card, Display, Heading, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
+import { Avatar, Body, Button, Card, Display, Heading, InfoDrop, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
-import { fetchMyTeams, fetchRatingSummary, matchStatusText, RatingSummary, refreshChallenges, TeamRow, useChallenges } from '@/lib/matches';
+import { fetchFriends } from '@/lib/friends';
+import { fetchMyTeams, fetchRatingSummary, matchStatusText, RatingSummary, refreshChallenges, TeamRow, useChallenges, useTeamPlayers } from '@/lib/matches';
 import { useProfile } from '@/lib/profile';
 import { formatScores } from '@/lib/scores';
 import { useTheme } from '@/lib/theme';
@@ -18,16 +19,21 @@ export default function ProfileScreen() {
   const challenges = useChallenges(demoMode);
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [ratings, setRatings] = useState<RatingSummary | null>(null);
+  const [friendCount, setFriendCount] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       fetchMyTeams(demoMode).then(setTeams);
       fetchRatingSummary(demoMode).then(setRatings);
+      fetchFriends(demoMode).then((f) => setFriendCount(f.filter((x) => x.relation === 'friend').length));
       refreshChallenges(demoMode);
     }, [demoMode]),
   );
 
+  const teamPlayers = useTeamPlayers(demoMode, teams);
   const name = profile?.display_name ?? '';
+  const doubles = teams.filter((t) => !t.is_singles);
+  const solo = teams.find((t) => t.is_singles);
   const wins = teams.reduce((n, t) => n + Number(t.wins), 0);
   const losses = teams.reduce((n, t) => n + Number(t.losses), 0);
   const played = wins + losses;
@@ -40,9 +46,6 @@ export default function ProfileScreen() {
           @{profile?.username}
         </Body>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Link href="/friends" asChild>
-            <Button label="Friends" variant="outline" size="sm" />
-          </Link>
           <Link href="/profile-edit" asChild>
             <Button label="Edit" variant="outline" size="sm" />
           </Link>
@@ -67,7 +70,8 @@ export default function ProfileScreen() {
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Stat value={`${wins}–${losses}`} label="Record" />
         <Stat value={played ? `${Math.round((wins / played) * 100)}%` : '–'} label="Win rate" />
-        <Stat value={String(teams.length)} label="Teams" tone="accent" />
+        <Stat value={String(doubles.length)} label="Teams" tone="accent" />
+        <Stat value={String(friendCount)} label="Friends" />
       </View>
 
       <Link href="/ratings" asChild>
@@ -99,24 +103,51 @@ export default function ProfileScreen() {
 
       <View style={{ gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <SectionHeader title="My teams" />
+          <SectionHeader title={`My teams (${doubles.length})`} />
           <Link href="/team/new" asChild>
             <Button label="+ New team" size="sm" />
           </Link>
         </View>
-        {teams.length === 0 ? (
+        {doubles.length === 0 ? (
           <Card style={{ padding: 16 }}>
-            <Body tone="muted">No teams yet. Tap + New team and pick a partner.</Body>
+            <Body tone="muted">No doubles teams yet. Tap + New team and pick a friend as your partner.</Body>
           </Card>
         ) : null}
-        {teams.map((team) => (
-          <ListRow
-            key={team.team_id}
-            left={<Avatar initials={initialsOf(team.partner_name ?? team.team_name)} size={40} />}
-            title={team.team_name}
-            subtitle={`${team.wins}–${team.losses} · with ${team.partner_name}`}
-          />
+        <InfoDrop title="What is a team?">
+          A team is you and one friend for doubles. Your wins and losses are counted for the team, and your team name shows on leaderboards. Singles is built in, so you can always challenge someone 1 vs 1.
+        </InfoDrop>
+        {doubles.map((team) => (
+          <Link key={team.team_id} href={{ pathname: '/team/[id]', params: { id: team.team_id } }} asChild>
+            <Pressable accessibilityRole="link">
+              <ListRow
+                left={<Avatar initials={initialsOf(team.partner_name ?? team.team_name)} size={40} />}
+                title={team.team_name}
+                subtitle={`${teamPlayers[team.team_id] ?? `You and ${team.partner_name}`}\n${team.wins}–${team.losses}`}
+                right={
+                  <Body size={13} weight="semibold" tone="accent">
+                    Edit
+                  </Body>
+                }
+              />
+            </Pressable>
+          </Link>
         ))}
+        {solo ? (
+          <Link href={{ pathname: '/team/[id]', params: { id: solo.team_id } }} asChild>
+            <Pressable accessibilityRole="link">
+              <ListRow
+                left={<Avatar initials={initialsOf(name)} size={40} />}
+                title="Singles"
+                subtitle={`${solo.wins}–${solo.losses} · just you`}
+                right={
+                  <Body size={13} weight="semibold" tone="accent">
+                    History
+                  </Body>
+                }
+              />
+            </Pressable>
+          </Link>
+        ) : null}
       </View>
 
       <View style={{ gap: 6 }}>

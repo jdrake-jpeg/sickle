@@ -15,6 +15,12 @@ export type Court = {
   court_count: number | null;
   has_lights?: boolean | null;
   lights_until?: number | null;
+  // A permanent note from an admin (parking, hours, rules). Never fades.
+  admin_note?: string | null;
+  // Only you and your friends can see a private court.
+  is_private?: boolean;
+  // The player who added it (null for courts entered before accounts existed).
+  submitted_by?: string | null;
 };
 
 export type PendingCourt = Court & {
@@ -53,7 +59,8 @@ export function useCourts() {
       );
       return;
     }
-    const { data } = await supabase.from('courts').select(courtColumns).eq('status', 'approved').order('name');
+    // Row level security already leaves out other people's private courts.
+    const { data } = await supabase.from('courts').select('*').eq('status', 'approved').order('name');
     setCourts((data as Court[] | null) ?? []);
   }, [demoMode]);
 
@@ -78,9 +85,12 @@ export async function fetchPendingCourts(demoMode: boolean): Promise<PendingCour
   );
 }
 
-export async function fetchLeaderboard(courtId: string): Promise<LeaderboardRow[]> {
+// Doubles by default. Singles needs the singles update in the database.
+export async function fetchLeaderboard(courtId: string, singles = false): Promise<LeaderboardRow[]> {
   if (!supabase) return [];
-  const { data } = await supabase.rpc('court_leaderboard', { p_court: courtId });
+  const { data } = singles
+    ? await supabase.rpc('court_leaderboard', { p_court: courtId, p_singles: true })
+    : await supabase.rpc('court_leaderboard', { p_court: courtId });
   return (data as LeaderboardRow[] | null) ?? [];
 }
 
@@ -188,7 +198,9 @@ export function courtsNear<T extends { lat: number; lng: number }>(here: { lat: 
 }
 
 // How a court is right now, from players who are there. Reports fade after
-// 6 hours (court_conditions in supabase/migrations).
+// 2 hours (court_conditions in supabase/migrations). To change the timer,
+// change it there and in conditionHours below.
+export const conditionHours = 2;
 export type Condition = 'good' | 'wet' | 'windy' | 'icy' | 'crowded';
 export type ConditionReport = { condition: Condition; note: string | null; reporter_name: string; created_at: string };
 
@@ -241,11 +253,87 @@ export async function adminUpdateCourt(demoMode: boolean, courtId: string, edit:
   if (error) throw error;
 }
 
+// Admin: set the permanent note shown on a court's page. Blank clears it.
+export async function adminSetCourtNote(demoMode: boolean, courtId: string, note: string) {
+  if (demoMode || !supabase) return;
+  const { error } = await supabase.rpc('admin_set_court_note', { p_court: courtId, p_note: note });
+  if (error) throw error;
+}
+
 // Admin: take a court off Sickle. A court with challenges or matches is hidden
 // instead of deleted, so match history stays.
 export async function adminRemoveCourt(demoMode: boolean, courtId: string): Promise<'deleted' | 'hidden'> {
   if (demoMode || !supabase) return 'deleted';
   const { data, error } = await supabase.rpc('admin_remove_court', { p_court: courtId });
   if (error) throw error;
+  return data as 'deleted' | 'hidden';
+}
+
+// ---------------------------------------------------------------------------
+// Finding courts in the app
+// ---------------------------------------------------------------------------
+
+// How far "nearby" reaches in the courts list.
+export const nearbyMiles = 25;
+
+export type CourtWithMiles = Court & { miles: number | null };
+
+// Courts within nearbyMiles of you, nearest first. With no location, everything.
+export function nearbyCourts(here: { lat: number; lng: number } | null, list: Court[], miles = nearbyMiles): CourtWithMiles[] {
+  const sorted = courtsNear(here, list);
+  return here ? sorted.filter((c) => c.miles !== null && c.miles <= miles) : sorted;
+}
+
+// Search every court you can see by name or address, nearest first.
+export function searchCourts(here: { lat: number; lng: number } | null, list: Court[], query: string): CourtWithMiles[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  return courtsNear(here, list).filter((c) => c.name.toLowerCase().includes(q) || (c.address ?? '').toLowerCase().includes(q));
+}
+
+const missingCourtUpdate = "This isn't in the database yet. Run the newest files from supabase/migrations in the Supabase SQL Editor.";
+
+function courtError(error: { code?: string; message: string }) {
+  return new Error(error.code === 'PGRST202' ? missingCourtUpdate : error.message);
+}
+
+// A court that shows on the map (a gray pin) goes straight into Sickle. If
+// it's already there, you get the existing court. Returns the court's id.
+export async function addMapCourt(demoMode: boolean, spot: GoogleCourt): Promise<string> {
+  if (demoMode || !supabase) return 'porter';
+  const { data, error } = await supabase.rpc('add_map_court', {
+    p_name: spot.name,
+    p_lat: spot.lat,
+    p_lng: spot.lng,
+    p_address: spot.address,
+    p_place_id: spot.place_id,
+  });
+  if (error) throw courtError(error);
+  return data as string;
+}
+
+// A private court: saved right away for you and your friends. Never sent to
+// an admin, and not allowed where a public court already is.
+export async function createPrivateCourt(
+  demoMode: boolean,
+  court: { name: string; lat: number; lng: number; address: string | null; court_count: number | null; indoor: boolean },
+): Promise<string> {
+  if (demoMode || !supabase) return 'porter';
+  const { data, error } = await supabase.rpc('create_private_court', {
+    p_name: court.name,
+    p_lat: court.lat,
+    p_lng: court.lng,
+    p_address: court.address,
+    p_court_count: court.court_count,
+    p_indoor: court.indoor,
+  });
+  if (error) throw courtError(error);
+  return data as string;
+}
+
+export async function removePrivateCourt(demoMode: boolean, courtId: string): Promise<'deleted' | 'hidden'> {
+  if (demoMode || !supabase) return 'deleted';
+  const { data, error } = await supabase.rpc('remove_private_court', { p_court: courtId });
+  if (error) throw courtError(error);
   return data as 'deleted' | 'hidden';
 }

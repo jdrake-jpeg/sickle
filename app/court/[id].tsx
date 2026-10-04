@@ -1,11 +1,11 @@
-import { Link, Stack, useLocalSearchParams } from 'expo-router';
+import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 
 import { CourtAdminPanel } from '@/components/CourtAdminPanel';
 import { CourtMap } from '@/components/CourtMap';
 import { LightsPicker, lightsText, LightsValue, saveLights } from '@/components/LightsPicker';
-import { Body, Button, Card, Chip, Display, Field, Heading, Screen, SectionHeader } from '@/components/ui';
+import { Body, Button, Card, Chip, Display, Field, Heading, Screen, SectionHeader, Segmented } from '@/components/ui';
 import { fonts } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import {
@@ -13,21 +13,24 @@ import {
   conditionInfo,
   ConditionReport,
   conditions,
+  conditionHours,
   Court,
   courtMeta,
   fetchCourtConditions,
   fetchLeaderboard,
   fetchMyTeamIds,
   openDirections,
+  removePrivateCourt,
   reportCondition,
 } from '@/lib/courts';
-import { timeAgo } from '@/lib/matches';
+import { timeAgo, useTeamPlayers } from '@/lib/matches';
+import { championWins } from '@/lib/play';
 import { useProfile } from '@/lib/profile';
 import { courts as sampleCourts } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
 
-type Row = { rank: number; teamId: string; name: string; rating: number; record: string; mine: boolean };
+type Row = { rank: number; teamId: string; name: string; rating: number; record: string; wins: number; mine: boolean };
 
 export default function CourtScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -36,6 +39,8 @@ export default function CourtScreen() {
   const { isAdmin } = useProfile();
   const [court, setCourt] = useState<Court | null | undefined>(undefined);
   const [rows, setRows] = useState<Row[]>([]);
+  const teamPlayers = useTeamPlayers(demoMode, rows.map((r) => ({ team_id: r.teamId })));
+  const [format, setFormat] = useState<'doubles' | 'singles'>('doubles');
   const [reports, setReports] = useState<ConditionReport[]>([]);
   const [picked, setPicked] = useState<Condition | null>(null);
   const [note, setNote] = useState('');
@@ -82,19 +87,19 @@ export default function CourtScreen() {
           ? { id: sample.id, name: sample.name, lat: sample.lat, lng: sample.lng, address: null, indoor: sample.meta.startsWith('Indoor'), court_count: Number(sample.meta.match(/(\d+) courts/)?.[1]) || null, has_lights: sample.id === 'porter', lights_until: sample.id === 'porter' ? 22 : null }
           : null,
       );
-      setRows((sample?.leaderboard ?? []).map((r) => ({ ...r, teamId: `${id}-${r.rank}`, mine: Boolean(r.mine) })));
+      setRows((sample?.leaderboard ?? []).map((r) => ({ ...r, teamId: `${id}-${r.rank}`, wins: Number(String(r.record).split('–')[0]) || 0, mine: Boolean(r.mine) })));
       return;
     }
     (async () => {
       const { data } = await supabase!.from('courts').select('*').eq('id', id).maybeSingle();
       setCourt((data as Court | null) ?? null);
       if (!data) return;
-      const [board, mine] = await Promise.all([fetchLeaderboard(id), fetchMyTeamIds(session?.user.id)]);
+      const [board, mine] = await Promise.all([fetchLeaderboard(id, format === 'singles'), fetchMyTeamIds(session?.user.id)]);
       setRows(
-        board.map((r) => ({ rank: r.rank, teamId: r.team_id, name: r.team_name, rating: r.rating, record: `${r.wins}–${r.losses}`, mine: mine.has(r.team_id) })),
+        board.map((r) => ({ rank: r.rank, teamId: r.team_id, name: r.team_name, rating: r.rating, record: `${r.wins}–${r.losses}`, wins: r.wins, mine: mine.has(r.team_id) })),
       );
     })();
-  }, [demoMode, id, session?.user.id]);
+  }, [demoMode, id, session?.user.id, format]);
 
   if (court === undefined) return <Screen>{null}</Screen>;
   if (!court) {
@@ -105,7 +110,9 @@ export default function CourtScreen() {
     );
   }
 
-  const champs = rows[0];
+  const lead = rows[0];
+  // The crown needs the #1 spot and at least 6 wins here.
+  const champs = lead && lead.wins >= championWins ? lead : undefined;
   const latest = reports[0];
 
   return (
@@ -120,6 +127,47 @@ export default function CourtScreen() {
 
       <CourtMap height={160} interactive={false} center={court} courts={[{ id: court.id, name: court.name, lat: court.lat, lng: court.lng }]} />
       <Button label="Directions" variant="outline" size="sm" onPress={() => openDirections(court)} />
+
+      {court.is_private ? (
+        <Card style={{ padding: 14, gap: 8 }}>
+          <Body weight="semibold">🔒 Private court</Body>
+          <Body size={13} tone="muted">
+            Only the player who saved it and their friends can see it, and only they can play ranked games here. It has no crown.
+          </Body>
+          {court.submitted_by === session?.user.id ? (
+            <Button
+              label="Remove this court"
+              variant="dangerOutline"
+              size="sm"
+              style={{ alignSelf: 'flex-start' }}
+              onPress={() =>
+                Alert.alert('Remove this private court?', 'Games already played here stay in everyone’s history.', [
+                  { text: 'Keep it', style: 'cancel' },
+                  {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await removePrivateCourt(demoMode, court.id);
+                        router.back();
+                      } catch (e) {
+                        Alert.alert("Couldn't remove it", e instanceof Error ? e.message : 'Try again.');
+                      }
+                    },
+                  },
+                ])
+              }
+            />
+          ) : null}
+        </Card>
+      ) : null}
+
+      {court.admin_note ? (
+        <Card style={{ padding: 16, gap: 6 }}>
+          <SectionHeader title="Good to know" detail="From a Sickle admin" />
+          <Body>{court.admin_note}</Body>
+        </Card>
+      ) : null}
 
       <Card style={{ padding: 16, gap: 10 }}>
         <SectionHeader title="Lights" />
@@ -147,7 +195,7 @@ export default function CourtScreen() {
       </Card>
 
       <Card style={{ padding: 16, gap: 10 }}>
-        <SectionHeader title="Conditions now" detail="Last 6 hours" />
+        <SectionHeader title="Conditions now" detail={`Last ${conditionHours} hours`} />
         {latest ? (
           <View style={{ gap: 6 }}>
             <Heading size={20}>
@@ -161,7 +209,7 @@ export default function CourtScreen() {
             ))}
           </View>
         ) : (
-          <Body tone="muted">No reports yet today. At the courts? Tell everyone how it is.</Body>
+          <Body tone="muted">No recent reports. At the courts? Tell everyone how it is. Reports clear after {conditionHours} hours.</Body>
         )}
         <Body size={13} weight="semibold" tone="muted">
           How is it right now?
@@ -180,36 +228,70 @@ export default function CourtScreen() {
       </Card>
 
       {champs ? (
-        <View style={{ backgroundColor: colors.accentFill, borderRadius: 18, padding: 16, gap: 2 }}>
-          <Heading size={12} tone="onAccent" style={{ letterSpacing: 1 }}>
-            COURT CHAMPS
+        <Link href={{ pathname: '/team/[id]', params: { id: champs.teamId } }} asChild>
+          <Pressable accessibilityRole="link" style={{ backgroundColor: colors.accentFill, borderRadius: 18, padding: 16, gap: 2 }}>
+            <Heading size={12} tone="onAccent" style={{ letterSpacing: 1 }}>
+              {format === 'singles' ? '👑 SINGLES COURT CHAMP' : '👑 COURT CHAMPS'}
+            </Heading>
+            <Heading size={22} tone="onAccent">
+              {champs.name}
+            </Heading>
+            <Body size={13} weight="medium" tone="onAccent">
+              {champs.record} at {court.name}
+            </Body>
+          </Pressable>
+        </Link>
+      ) : (
+        <Card style={{ padding: 16, gap: 4 }}>
+          <Heading size={12} style={{ letterSpacing: 1 }}>
+            {format === 'singles' ? 'NO SINGLES CHAMP YET' : 'NO COURT CHAMP YET'}
           </Heading>
-          <Heading size={22} tone="onAccent">
-            {champs.name}
-          </Heading>
-          <Body size={13} weight="medium" tone="onAccent">
-            {champs.record} at {court.name}
+          <Body size={13} tone="muted">
+            {lead
+              ? `${lead.name} leads with ${lead.wins} ${lead.wins === 1 ? 'win' : 'wins'}. Finish #1 with ${championWins} wins at ${court.name} to take the crown.`
+              : `Finish #1 with ${championWins} wins at ${court.name} to take the crown.`}
           </Body>
-        </View>
-      ) : null}
+        </Card>
+      )}
 
       <View style={{ gap: 6 }}>
-        <SectionHeader title="Leaderboard" detail="Doubles teams" />
+        <SectionHeader title="Leaderboard" />
+        <Segmented
+          value={format}
+          onChange={setFormat}
+          options={[
+            { value: 'doubles', label: 'Doubles' },
+            { value: 'singles', label: 'Singles' },
+          ]}
+        />
         {rows.length === 0 ? (
           <Card style={{ padding: 16 }}>
-            <Body tone="muted">No ranked matches here yet. Challenge a team to a match at {court.name} to get on the board.</Body>
+            <Body tone="muted">
+              {format === 'singles'
+                ? `No ranked singles matches here yet. Challenge a player to a singles match at ${court.name} to get on the board.`
+                : `No ranked matches here yet. Challenge a team to a match at ${court.name} to get on the board.`}
+            </Body>
           </Card>
         ) : null}
         {rows.map((row) => (
+          <Link key={row.teamId} href={{ pathname: '/team/[id]', params: { id: row.teamId } }} asChild>
+            <Pressable accessibilityRole="link">
           <Card
-            key={row.teamId}
             highlighted={row.mine}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, minHeight: 52 }}>
             <Body style={{ fontFamily: fonts.numeric, width: 20 }} tone={row.mine ? 'accent' : 'default'}>
               {row.rank}
             </Body>
             <View style={{ flex: 1 }}>
-              <Body weight={row.mine ? 'bold' : 'semibold'}>{row.name}</Body>
+              <Body weight={row.mine ? 'bold' : 'semibold'}>
+                {champs && row.teamId === champs.teamId ? '👑 ' : ''}
+                {row.name}
+              </Body>
+              {format !== 'singles' && teamPlayers[row.teamId] ? (
+                <Body size={12} tone="muted">
+                  {teamPlayers[row.teamId]}
+                </Body>
+              ) : null}
               <Body size={12} tone="muted">
                 {row.record} · {row.rating}
               </Body>
@@ -220,13 +302,15 @@ export default function CourtScreen() {
               </Link>
             ) : null}
           </Card>
+            </Pressable>
+          </Link>
         ))}
         <Body size={12} tone="muted">
-          Only confirmed matches count. Beating a higher-rated team moves you up more.
+          Tap a team to see its wins. Only confirmed matches count. Beating a higher-rated team moves you up more.
         </Body>
       </View>
 
-      {isAdmin ? <CourtAdminPanel court={court} demoMode={demoMode} onSaved={setCourt} /> : null}
+      {isAdmin && !court.is_private ? <CourtAdminPanel court={court} demoMode={demoMode} onSaved={setCourt} /> : null}
     </Screen>
   );
 }

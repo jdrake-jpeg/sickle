@@ -68,6 +68,13 @@ do $$ begin assert (select status from public.courts where id = (select id from 
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000a2';
 select pg_temp.expect_error($$select public.submit_court('Elsewhere', 45.5, -113.5, null, null, false, null, 'places/abc')$$, 'That court is already listed');
 
+reset role;
+-- Teams are friends only.
+insert into public.friendships (requester_id, addressee_id, status, accepted_at) values
+  ('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000a2', 'accepted', now()),
+  ('00000000-0000-0000-0000-0000000000a3', '00000000-0000-0000-0000-0000000000a4', 'accepted', now());
+
+set role authenticated;
 -- Ann + Ben challenge Cal + Dee: they show up as recent opponents.
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000a1';
 create temp table fteams (k text, id uuid);

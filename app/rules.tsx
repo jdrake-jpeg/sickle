@@ -46,11 +46,22 @@ const sections: { title: string; points: string[] }[] = [
       'Games go to 11, and you have to win by 2.',
       'Call the score before every serve as three numbers: your score, their score, then server 1 or 2. Like "4, 2, 1".',
       'The game starts at "0, 0, 2", so the first team only gets one server.',
-      'A Sickle match is best of 3 games.',
+      'A Sickle match is one game or best of 3 games. The team that sends the challenge picks.',
     ],
   },
   {
-    title: 'Who serves',
+    title: 'Scoring (singles)',
+    points: [
+      'Same court, same net, same kitchen. The court is not narrower: singles uses the whole court.',
+      'Games go to 11, win by 2, and only the server can score.',
+      'You only call two numbers: the server\'s score, then the other player\'s. Like "4, 2".',
+      'The server serves from the right side when their score is even, and from the left when it is odd.',
+      'When the server loses the rally, the serve goes to the other player. There is no second server.',
+      'A Sickle singles match is also one game or best of 3, and it only plays against another singles player.',
+    ],
+  },
+  {
+    title: 'Who serves (doubles)',
     points: [
       'The first serve of each turn comes from the right side of the court.',
       'When your team wins a point, the server switches sides with their partner and serves again from the other side.',
@@ -81,7 +92,7 @@ const sections: { title: string; points: string[] }[] = [
 export default function RulesScreen() {
   return (
     <Screen>
-      <Body tone="muted">The quick version for doubles. Learn the game, or settle a call right here.</Body>
+      <Body tone="muted">The quick version for doubles and singles. Learn the game, or settle a call right here.</Body>
       {sections.map((s) => (
         <Card key={s.title} style={{ padding: 16, gap: 8 }}>
           <Heading>{s.title.toUpperCase()}</Heading>

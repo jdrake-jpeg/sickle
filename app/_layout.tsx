@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 
 import { fonts } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { setupNotificationHandler } from '@/lib/notifications';
 import { ProfileProvider, useProfile } from '@/lib/profile';
 import { SickleThemeProvider, useTheme } from '@/lib/theme';
 
@@ -23,6 +24,7 @@ export const unstable_settings = {
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+setupNotificationHandler();
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -89,24 +91,28 @@ function RootLayoutNav() {
     <ThemeProvider value={navigationTheme}>
       <StatusBar style={name === 'dark' ? 'light' : 'dark'} />
       <Stack
-        screenOptions={{ headerShadowVisible: false, headerTintColor: colors.text, headerTitleStyle: { fontFamily: fonts.bodyBold } }}>
+        screenOptions={{ headerShadowVisible: false, headerBackTitle: 'Back', headerTintColor: colors.text, headerTitleStyle: { fontFamily: fonts.bodyBold } }}>
         <Stack.Protected guard={signedIn && hasProfile}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="match/[id]" options={{ title: 'Match' }} />
           <Stack.Screen name="score/[challengeId]" options={{ title: 'Enter score' }} />
           <Stack.Screen name="court/[id]" options={{ title: 'Court' }} />
           <Stack.Screen name="court/new" options={{ title: 'Add a court' }} />
-          <Stack.Screen name="friends/index" options={{ title: 'Friends' }} />
-          <Stack.Screen name="friends/[id]" options={{ title: 'Friend' }} />
+          <Stack.Screen name="court/map" options={{ title: 'Courts map' }} />
+          <Stack.Screen name="friends/[id]" options={{ title: 'Games and ratings' }} />
+          <Stack.Screen name="chat/[id]" options={{ title: 'Chat' }} />
           <Stack.Screen name="challenge/new" options={{ title: 'Send a challenge' }} />
           <Stack.Screen name="ratings" options={{ title: 'Your private ratings' }} />
           <Stack.Screen name="profile-edit" options={{ title: 'Edit profile' }} />
           <Stack.Screen name="rules" options={{ title: 'Pickleball rules' }} />
           <Stack.Screen name="team/new" options={{ title: 'New team' }} />
+          <Stack.Screen name="team/[id]" options={{ title: 'Team' }} />
           <Stack.Screen name="admin/courts" options={{ title: 'Review courts' }} />
           <Stack.Screen name="admin/admins" options={{ title: 'Manage admins' }} />
           <Stack.Screen name="player/[id]" options={{ title: 'Player' }} />
           <Stack.Screen name="settings" options={{ title: 'Settings', presentation: 'modal' }} />
+          <Stack.Screen name="notifications" options={{ title: 'Alerts' }} />
+          <Stack.Screen name="welcome" options={{ title: 'Welcome', presentation: 'modal' }} />
         </Stack.Protected>
         <Stack.Protected guard={signedIn && !hasProfile}>
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />

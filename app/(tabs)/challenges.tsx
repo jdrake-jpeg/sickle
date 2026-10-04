@@ -3,9 +3,10 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
 import { SickleSlice } from '@/components/SickleSlice';
-import { Body, Button, Card, Display, Heading, Screen, Segmented } from '@/components/ui';
+import { Body, Button, Card, Display, Heading, InfoDrop, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import {
+  bestOfOf,
   cancelChallenge,
   ChallengeRow,
   formatWhen,
@@ -13,8 +14,9 @@ import {
   refreshChallenges,
   respondToChallenge,
   useChallenges,
+  useTeamPlayers,
 } from '@/lib/matches';
-import { formatScores } from '@/lib/scores';
+import { formatScores, matchLengthLabel } from '@/lib/scores';
 import { useTheme } from '@/lib/theme';
 
 type Tab = 'incoming' | 'sent' | 'upcoming' | 'played';
@@ -34,6 +36,11 @@ export default function ChallengesScreen() {
   );
 
   const all = rows ?? [];
+  const teamPlayers = useTeamPlayers(
+    demoMode,
+    all.flatMap((r) => [{ team_id: r.my_team_id }, { team_id: r.their_team_id }]),
+  );
+  const who = (id: string) => (teamPlayers[id] ? ` (${teamPlayers[id]})` : '');
   const toConfirm = all.filter((r) => r.match_status === 'awaiting_confirmation' && r.awaiting_me);
   const incoming = all.filter((r) => r.status === 'pending' && !r.i_challenged);
   const sent = all.filter((r) => r.status === 'pending' && r.i_challenged);
@@ -114,6 +121,15 @@ export default function ChallengesScreen() {
         ]}
       />
 
+      <InfoDrop title="How do challenges work?">
+        <Body size={13} tone="muted">
+          New: challenges sent to you. Accept or decline. Sent: challenges you sent, waiting on an answer. Upcoming: accepted games, enter the score here after you play. Played: finished matches.
+        </Body>
+        <Body size={13} tone="muted">
+          After a game one side enters the score and the other side confirms it. Only confirmed games count for wins and leaderboards. To challenge someone, tap their profile from Play.
+        </Body>
+      </InfoDrop>
+
       {rows === null ? <Body tone="muted">Loading…</Body> : null}
 
       {tab === 'incoming' && rows ? (
@@ -127,18 +143,30 @@ export default function ChallengesScreen() {
                   YOU&apos;VE BEEN CHALLENGED
                 </Heading>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Heading size={18} style={{ flex: 1 }}>
-                    {r.their_team_name}
-                  </Heading>
+                  <View style={{ flex: 1 }}>
+                    <Heading size={18}>{r.their_team_name}</Heading>
+                    {teamPlayers[r.their_team_id] ? (
+                      <Body size={12} tone="muted">
+                        {teamPlayers[r.their_team_id]}
+                      </Body>
+                    ) : null}
+                  </View>
                   <Heading size={18} style={{ color: colors.danger }}>
                     VS
                   </Heading>
-                  <Heading size={18} style={{ flex: 1, textAlign: 'right' }}>
-                    {r.my_team_name}
-                  </Heading>
+                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                    <Heading size={18} style={{ textAlign: 'right' }}>
+                      {r.my_team_name}
+                    </Heading>
+                    {teamPlayers[r.my_team_id] ? (
+                      <Body size={12} tone="muted" style={{ textAlign: 'right' }}>
+                        {teamPlayers[r.my_team_id]}
+                      </Body>
+                    ) : null}
+                  </View>
                 </View>
                 <Body size={14} tone="subtle">
-                  {r.court_name} · {formatWhen(r.proposed_time)} · Ranked, best of 3
+                  {r.court_name} · {formatWhen(r.proposed_time)} · Ranked, {matchLengthLabel(bestOfOf(r)).toLowerCase()}
                 </Body>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <Button
@@ -167,7 +195,7 @@ export default function ChallengesScreen() {
           {sent.map((r) => (
             <Card key={r.challenge_id} style={{ padding: 16, gap: 6 }}>
               <Body weight="semibold">
-                {r.my_team_name} challenged {r.their_team_name}
+                {r.my_team_name}{who(r.my_team_id)} challenged {r.their_team_name}{who(r.their_team_id)}
               </Body>
               <Body size={13} tone="muted">
                 {r.court_name} · {formatWhen(r.proposed_time)} · Waiting for them to answer

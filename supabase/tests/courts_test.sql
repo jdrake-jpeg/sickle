@@ -76,7 +76,17 @@ do $$ begin assert (select count(*) from public.courts where id = pg_temp.cid('f
 select public.submit_court('Real Court', 10, 10);
 
 -- Five pending submissions is the limit.
-select public.submit_court('Spot ' || n, 20 + n, 20) from generate_series(1, 4) n;
+-- (3 a day applies first, so move older submissions out of the last day.)
+reset role;
+update public.courts set created_at = now() - interval '3 days' where submitted_by = '00000000-0000-0000-0000-0000000000f2';
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000f2';
+select public.submit_court('Spot ' || n, 20 + n, 20) from generate_series(1, 2) n;
+reset role;
+update public.courts set created_at = now() - interval '3 days' where submitted_by = '00000000-0000-0000-0000-0000000000f2';
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000f2';
+select public.submit_court('Spot ' || n, 20 + n, 20) from generate_series(3, 4) n;
 select pg_temp.expect_error($$select public.submit_court('Spot 6', 30, 30)$$, 'You have 5 courts waiting');
 
 -- Admin access: only admins grant or remove it, and one admin always remains.

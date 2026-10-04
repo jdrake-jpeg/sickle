@@ -2,13 +2,14 @@ import { Link, Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
+import { ChallengeBuilder } from '@/components/ChallengeBuilder';
 import { HistoryList } from '@/components/HistoryList';
 import { tierOf } from '@/components/SkillPicker';
-import { Avatar, Body, Button, Card, Display, Field, Heading, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
+import { Avatar, Body, Button, Card, Display, Field, Heading, InfoDrop, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { addFriend, fetchRelation, Relation, relationLabel, removeFriend } from '@/lib/friends';
-import { fetchMyTeams, fetchPlayerHistory, fetchPlayerTeams, HistoryRow, TeamRow } from '@/lib/matches';
+import { fetchMyTeams, fetchPlayerHistory, fetchPlayerTeams, HistoryRow, TeamRow, useTeamPlayers } from '@/lib/matches';
 import { Crown, crownText, fetchPlayerCrowns, fetchPlayerOpen, formatTags, PlayerOpen } from '@/lib/play';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
@@ -31,6 +32,7 @@ export default function PlayerScreen() {
   const [relation, setRelation] = useState<Relation>(null);
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [teamsVersion, setTeamsVersion] = useState(0);
+  const [showTeams, setShowTeams] = useState(false);
   const [history, setHistory] = useState<HistoryRow[] | null>(null);
   const [open, setOpen] = useState<PlayerOpen | null>(null);
   const [crowns, setCrowns] = useState<Crown[]>([]);
@@ -52,6 +54,8 @@ export default function PlayerScreen() {
       setTeams(theirs.filter((t) => !myIds.has(t.team_id)));
     });
   }, [demoMode, id, teamsVersion]);
+
+  const teamPlayers = useTeamPlayers(demoMode, teams);
 
   useEffect(() => {
     fetchPlayerHistory(demoMode, id).then(setHistory);
@@ -101,7 +105,7 @@ export default function PlayerScreen() {
     const name = teamName.trim();
     const ok = await run(() => supabase!.rpc('create_team', { p_partner: player.id, p_name: name || null }));
     if (!ok) return;
-    Alert.alert('Team created', `${name || `You + ${firstName}`} is ready. Challenge a team from a court leaderboard or a player's page.`);
+    Alert.alert('Team created', `${name || `You + ${firstName}`} is ready. Pick it when you challenge another team.`);
     setTeamName('');
     setTeamsVersion((v) => v + 1);
   };
@@ -211,31 +215,32 @@ export default function PlayerScreen() {
         </Link>
       ) : null}
 
-      {teams.length > 0 ? (
-        <View style={{ gap: 8 }}>
-          <SectionHeader title={`${firstName}'s teams`} detail="Tap one to see its wins" />
-          {open && !open.can_challenge ? (
-            <Body size={13} tone="muted">
-              {open.challenge_note ?? `${firstName} isn't taking challenges right now`}
-            </Body>
-          ) : null}
-          {teams.map((t) => (
-            <Link key={t.team_id} href={{ pathname: '/team/[id]', params: { id: t.team_id } }} asChild>
-              <Pressable accessibilityRole="link">
-                <ListRow
-                  title={t.is_singles ? 'Singles' : t.team_name}
-                  subtitle={`${t.wins}–${t.losses} · tap for history`}
-                  right={
-                    <Link href={{ pathname: '/challenge/new', params: { team: t.team_id, teamName: t.is_singles ? player.name : t.team_name } }} asChild>
-                      <Button label="Challenge" variant="dangerOutline" size="sm" disabled={Boolean(open && !open.can_challenge)} />
-                    </Link>
-                  }
-                />
-              </Pressable>
-            </Link>
-          ))}
-        </View>
-      ) : null}
+      <ChallengeBuilder
+        playerId={player.id}
+        firstName={firstName}
+        blocked={Boolean(open && !open.can_challenge)}
+        blockedNote={open?.challenge_note}
+      />
+
+      <View style={{ gap: 8 }}>
+        <Button label={showTeams ? 'Hide player teams' : 'Player teams'} variant="outline" onPress={() => setShowTeams(!showTeams)} />
+        {showTeams ? (
+          teams.length === 0 ? (
+            <Body tone="muted">{firstName} isn&apos;t on any teams yet.</Body>
+          ) : (
+            teams.map((t) => (
+              <Link key={t.team_id} href={{ pathname: '/team/[id]', params: { id: t.team_id } }} asChild>
+                <Pressable accessibilityRole="link">
+                  <ListRow
+                    title={t.is_singles ? 'Singles' : t.team_name}
+                    subtitle={[t.is_singles ? null : teamPlayers[t.team_id], `${t.wins}–${t.losses} · tap for history`].filter(Boolean).join('\n')}
+                  />
+                </Pressable>
+              </Link>
+            ))
+          )
+        ) : null}
+      </View>
 
       {stats && !(stats.hidden && stats.wins == null) ? (
         <View style={{ gap: 8 }}>
@@ -244,11 +249,17 @@ export default function PlayerScreen() {
         </View>
       ) : null}
 
-      <Card style={{ padding: 16, gap: 12 }}>
-        <Heading>TEAM UP WITH {firstName.toUpperCase()}</Heading>
-        <Field label="Team name (optional)" placeholder={`You + ${firstName}`} value={teamName} onChangeText={setTeamName} maxLength={40} />
-        <Button label="Create team" disabled={busy} onPress={createTeam} />
-      </Card>
+      {relation === 'friend' ? (
+        <Card style={{ padding: 16, gap: 12 }}>
+          <Heading>TEAM UP WITH {firstName.toUpperCase()}</Heading>
+          <Field label="Team name (optional)" placeholder={`You + ${firstName}`} value={teamName} onChangeText={setTeamName} maxLength={40} />
+          <Button label="Create team" variant="outline" disabled={busy} onPress={createTeam} />
+        </Card>
+      ) : (
+        <InfoDrop title={`Want to team up with ${firstName}?`}>
+          Teams are only with friends. Add {firstName} as a friend first. Once they accept, you can make a doubles team here.
+        </InfoDrop>
+      )}
 
       {reporting ? (
         <Card style={{ padding: 16, gap: 12 }}>

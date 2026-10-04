@@ -2,6 +2,7 @@ import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Switch, View } from 'react-native';
 
+import { NotificationSettings } from '@/components/NotificationSettings';
 import { PlayPrefs } from '@/components/PlayPrefs';
 import { skillLevels, tierOf } from '@/components/SkillPicker';
 import { Body, Button, Card, Chip, Heading, Screen, Segmented } from '@/components/ui';
@@ -125,6 +126,14 @@ export default function SettingsScreen() {
       </View>
 
       <View style={{ gap: 8 }}>
+        <Heading>NOTIFICATIONS</Heading>
+        <NotificationSettings />
+        <Link href="/notifications" asChild>
+          <Button label="See my alerts" variant="outline" size="sm" />
+        </Link>
+      </View>
+
+      <View style={{ gap: 8 }}>
         <Heading>PLAYING</Heading>
         <PlayPrefs />
       </View>
@@ -182,6 +191,9 @@ export default function SettingsScreen() {
       ) : null}
       <View style={{ gap: 8 }}>
         <Heading>ABOUT</Heading>
+        <Link href="/welcome" asChild>
+          <Button label="How Sickle works" variant="outline" />
+        </Link>
         <Link href="/privacy" asChild>
           <Button label="Privacy policy" variant="outline" />
         </Link>

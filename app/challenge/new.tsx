@@ -2,12 +2,13 @@ import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
-import { Body, Button, Card, Chip, Heading, Screen } from '@/components/ui';
+import { TeamPick } from '@/components/TeamPick';
+import { Body, Button, Card, Chip, Heading, InfoDrop, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { courtsNear, nearbyMiles, useCourts } from '@/lib/courts';
 import { formatMiles } from '@/lib/format';
 import { getLocationIfAllowed, LatLng } from '@/lib/location';
-import { fetchMyTeams, fetchTeamDetail, sendChallenge, TeamRow } from '@/lib/matches';
+import { fetchMyTeams, fetchTeamDetail, sendChallenge, TeamRow, useTeamPlayers } from '@/lib/matches';
 import { BestOf, matchLengthLabel } from '@/lib/scores';
 
 const times = [
@@ -34,17 +35,17 @@ function nextDays() {
 
 // Challenge a team: pick which of your teams plays, where, and when.
 export default function NewChallengeScreen() {
-  const { team, teamName, court } = useLocalSearchParams<{ team: string; teamName?: string; court?: string }>();
+  const { team, teamName, court, myTeam: myTeamParam, bestOf: bestOfParam } = useLocalSearchParams<{ team: string; teamName?: string; court?: string; myTeam?: string; bestOf?: string }>();
   const { demoMode } = useAuth();
   const { courts } = useCourts();
   const [teams, setTeams] = useState<TeamRow[] | null>(null);
-  const [myTeam, setMyTeam] = useState<string | null>(null);
+  const [myTeam, setMyTeam] = useState<string | null>(myTeamParam ?? null);
   // Singles teams only play singles teams, doubles only doubles.
   const [singles, setSingles] = useState<boolean | null>(null);
   const [courtId, setCourtId] = useState<string | null>(court ?? null);
   const [day, setDay] = useState(0);
   const [hour, setHour] = useState<number | null>(null);
-  const [bestOf, setBestOf] = useState<BestOf>(3);
+  const [bestOf, setBestOf] = useState<BestOf>(bestOfParam === '1' ? 1 : 3);
   const [busy, setBusy] = useState(false);
   const days = nextDays();
   const [here, setHere] = useState<LatLng | null>(null);
@@ -78,6 +79,9 @@ export default function NewChallengeScreen() {
   useEffect(() => {
     if (playable && playable.length === 1) setMyTeam(playable[0].team_id);
   }, [playable]);
+
+  const players = useTeamPlayers(demoMode, [{ team_id: team }, ...(playable ?? [])]);
+  const myChosen = (playable ?? []).find((t) => t.team_id === myTeam);
 
   const when = hour === null ? null : new Date(new Date(days[day].date).setHours(hour));
   const inPast = when !== null && when.getTime() < Date.now();
@@ -124,6 +128,24 @@ export default function NewChallengeScreen() {
         {singles ? 'Singles, 1 vs 1. ' : ''}Ranked. It counts once {singles ? 'you both' : 'both teams'} agree on the score.
       </Body>
 
+      <Card style={{ padding: 14, gap: 10 }}>
+        <Body size={12} weight="bold" tone="muted">
+          WHO PLAYS WHO
+        </Body>
+        <View style={{ gap: 2 }}>
+          <Body size={12} tone="accent" weight="bold">
+            {singles ? 'YOU' : 'YOUR TEAM'}
+          </Body>
+          <Body weight="semibold">{singles ? 'You' : myChosen ? `${myChosen.team_name}${players[myChosen.team_id] ? ` · ${players[myChosen.team_id]}` : ''}` : 'Pick your team below'}</Body>
+        </View>
+        <View style={{ gap: 2 }}>
+          <Body size={12} tone="danger" weight="bold">
+            {singles ? 'THEM' : 'THEIR TEAM'}
+          </Body>
+          <Body weight="semibold">{`${teamName || 'This team'}${players[team] && !singles ? ` · ${players[team]}` : ''}`}</Body>
+        </View>
+      </Card>
+
       <View style={{ gap: 8 }}>
         <Body weight="semibold">Match length</Body>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -138,12 +160,19 @@ export default function NewChallengeScreen() {
 
       {singles ? null : (
         <View style={{ gap: 8 }}>
-          <Body weight="semibold">Your team</Body>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {(playable ?? []).map((t) => (
-              <Chip key={t.team_id} label={t.team_name} selected={myTeam === t.team_id} onPress={() => setMyTeam(t.team_id)} />
-            ))}
-          </View>
+          <Body weight="semibold">Which of your teams is playing?</Body>
+          {(playable ?? []).map((t) => (
+            <TeamPick
+              key={t.team_id}
+              name={t.team_name}
+              players={players[t.team_id]}
+              selected={myTeam === t.team_id}
+              onPress={() => setMyTeam(t.team_id)}
+            />
+          ))}
+          <InfoDrop title="Why do I pick a team?">
+            In doubles a challenge is team against team. Pick the team of yours that will play, and the team above is the one you are challenging.
+          </InfoDrop>
         </View>
       )}
 

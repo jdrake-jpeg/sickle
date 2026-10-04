@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
 import { CourtMap } from '@/components/CourtMap';
-import { Body, Button, Card, Display, Field, Heading, Screen } from '@/components/ui';
+import { Body, Button, Card, Display, Heading, InfoDrop, Screen, SearchField } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import {
   addMapCourt,
@@ -29,6 +29,7 @@ import { championWins } from '@/lib/play';
 import { useProfile } from '@/lib/profile';
 import { courts as sampleCourts } from '@/lib/sample-data';
 import { useTheme } from '@/lib/theme';
+import { useClearOnBlur } from '@/lib/use-clear-on-blur';
 
 type Standing = { teams: number; champs: { name: string; record: string } | null; leader: { name: string; wins: number } | null; myRank: number | null };
 
@@ -71,6 +72,8 @@ export default function CourtsScreen() {
       if (isAdmin) fetchPendingCourts(demoMode).then((p) => setPendingCount(p.length));
     }, [reload, isAdmin, demoMode]),
   );
+
+  useClearOnBlur(() => setQuery(''));
 
   const searching = query.trim().length > 0;
   const nearby = useMemo(() => nearbyCourts(here, courts ?? []), [here, courts]);
@@ -178,7 +181,15 @@ export default function CourtsScreen() {
         </Link>
       ) : null}
 
-      <Field label="Search courts" placeholder="Court name or street" autoCorrect={false} value={query} onChangeText={setQuery} returnKeyType="search" />
+      <SearchField label="Search courts" placeholder="Court name or street" value={query} onChangeText={setQuery} />
+      <InfoDrop title="What are courts for?">
+        <Body size={13} tone="muted">
+          Every court has its own leaderboard. Pick the court you will play at when you send a challenge. Tap a court to see its top teams, its conditions (wet, crowded, nets down) and to report what it is like right now.
+        </Body>
+        <Body size={13} tone="muted">
+          Can&apos;t find your court? Use Add a court below.
+        </Body>
+      </InfoDrop>
 
       {searching ? null : (
         <>

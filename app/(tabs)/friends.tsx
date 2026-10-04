@@ -3,7 +3,7 @@ import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
 import { skillLabel } from '@/components/SkillPicker';
-import { Avatar, Body, Button, Card, Chip, Display, Field, ListRow, Screen, SectionHeader } from '@/components/ui';
+import { Avatar, Body, Button, Card, Chip, Display, InfoDrop, ListRow, Screen, SearchField, SectionHeader } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { Conversation, fetchConversations } from '@/lib/chat';
 import { initialsOf } from '@/lib/format';
@@ -23,6 +23,7 @@ import { formatTags } from '@/lib/play';
 import { useProfile } from '@/lib/profile';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
+import { useClearOnBlur } from '@/lib/use-clear-on-blur';
 
 function lastSeenText(iso: string, played: boolean) {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -60,6 +61,8 @@ export default function FriendsScreen() {
       load();
     }, [load]),
   );
+
+  useClearOnBlur(() => setQuery(''));
 
   const q = query.trim();
   useEffect(() => {
@@ -165,7 +168,15 @@ export default function FriendsScreen() {
       <View style={{ height: 44, justifyContent: 'center' }}>
         <Display>FRIENDS</Display>
       </View>
-      <Field label="Find a player" placeholder="Name or username" autoCapitalize="none" autoCorrect={false} value={query} onChangeText={setQuery} />
+      <InfoDrop title="What are friends for?">
+        <Body size={13} tone="muted">
+          Friends can chat with you and team up with you for doubles. You can only make a team with someone who is your friend.
+        </Body>
+        <Body size={13} tone="muted">
+          To add someone, search their name below, or tap a player you played against. They need to accept before you are friends.
+        </Body>
+      </InfoDrop>
+      <SearchField label="Find a player" placeholder="Name or username" value={query} onChangeText={setQuery} />
       {results.map((p) => row(p, `@${p.username}`, addButton(p)))}
       {q.length >= 2 && results.length === 0 ? <Body tone="muted">No player matches &ldquo;{q}&rdquo;.</Body> : null}
 

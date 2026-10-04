@@ -3,11 +3,11 @@ import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { tierOf } from '@/components/SkillPicker';
-import { Avatar, Body, Button, Card, Display, Heading, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
+import { Avatar, Body, Button, Card, Display, Heading, InfoDrop, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { fetchFriends } from '@/lib/friends';
-import { fetchMyTeams, fetchRatingSummary, matchStatusText, RatingSummary, refreshChallenges, TeamRow, useChallenges } from '@/lib/matches';
+import { fetchMyTeams, fetchRatingSummary, matchStatusText, RatingSummary, refreshChallenges, TeamRow, useChallenges, useTeamPlayers } from '@/lib/matches';
 import { useProfile } from '@/lib/profile';
 import { formatScores } from '@/lib/scores';
 import { useTheme } from '@/lib/theme';
@@ -30,6 +30,7 @@ export default function ProfileScreen() {
     }, [demoMode]),
   );
 
+  const teamPlayers = useTeamPlayers(demoMode, teams);
   const name = profile?.display_name ?? '';
   const doubles = teams.filter((t) => !t.is_singles);
   const solo = teams.find((t) => t.is_singles);
@@ -109,16 +110,19 @@ export default function ProfileScreen() {
         </View>
         {doubles.length === 0 ? (
           <Card style={{ padding: 16 }}>
-            <Body tone="muted">No doubles teams yet. Tap + New team and pick a partner.</Body>
+            <Body tone="muted">No doubles teams yet. Tap + New team and pick a friend as your partner.</Body>
           </Card>
         ) : null}
+        <InfoDrop title="What is a team?">
+          A team is you and one friend for doubles. Your wins and losses are counted for the team, and your team name shows on leaderboards. Singles is built in, so you can always challenge someone 1 vs 1.
+        </InfoDrop>
         {doubles.map((team) => (
           <Link key={team.team_id} href={{ pathname: '/team/[id]', params: { id: team.team_id } }} asChild>
             <Pressable accessibilityRole="link">
               <ListRow
                 left={<Avatar initials={initialsOf(team.partner_name ?? team.team_name)} size={40} />}
                 title={team.team_name}
-                subtitle={`${team.wins}–${team.losses} · with ${team.partner_name}`}
+                subtitle={`${teamPlayers[team.team_id] ?? `You and ${team.partner_name}`}\n${team.wins}–${team.losses}`}
                 right={
                   <Body size={13} weight="semibold" tone="accent">
                     Edit

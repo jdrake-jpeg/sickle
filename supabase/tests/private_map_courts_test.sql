@@ -52,10 +52,10 @@ do $$ begin
 end $$;
 select pg_temp.expect_error($$select public.add_map_court('No place', 45.6, -111.5, null, null)$$, 'Only courts from the map');
 
--- Limit: 10 a day.
+-- Limit: 3 a day.
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ba03';
-select public.add_map_court('Far ' || i, 46 + i * 0.1, -112, null, 'osm:way/lim' || i) from generate_series(1, 10) i;
-select pg_temp.expect_error($$select public.add_map_court('Far 11', 47.5, -112, null, 'osm:way/lim11')$$, 'You added a lot of courts today');
+select public.add_map_court('Far ' || i, 46 + i * 0.1, -112, null, 'osm:way/lim' || i) from generate_series(1, 3) i;
+select pg_temp.expect_error($$select public.add_map_court('Far 4', 47.5, -112, null, 'osm:way/lim4')$$, 'You can add 3 courts a day');
 
 -- Private courts.
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ba01';
@@ -78,7 +78,7 @@ select public.add_friend('00000000-0000-0000-0000-00000000ba01');
 do $$ begin assert (select count(*) from public.courts where id = pg_temp.id('priv')) = 1, 'friend can see it'; end $$;
 
 -- A public court can still be submitted right next to a private one.
-set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ba03';
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ba04';
 select public.submit_court('Public next door', 44.0001, -110.0, null, 2);
 
 -- Challenges at the private court: friends of the owner only.

@@ -84,6 +84,9 @@ export default function TeamScreen() {
     <Screen>
       <Stack.Screen options={{ title: 'Team' }} />
       <Display size={26}>{(team.is_singles ? `${team.team_name} · SINGLES` : team.team_name).toUpperCase()}</Display>
+      {!team.is_singles ? (
+        <Body tone="muted">{team.members.map((m) => m.name).join(' and ')}</Body>
+      ) : null}
 
       {crowns.length > 0 ? (
         <Card style={{ padding: 14, gap: 4 }} highlighted>

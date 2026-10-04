@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 
 import { fonts } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { setupNotificationHandler } from '@/lib/notifications';
 import { ProfileProvider, useProfile } from '@/lib/profile';
 import { SickleThemeProvider, useTheme } from '@/lib/theme';
 
@@ -23,6 +24,7 @@ export const unstable_settings = {
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+setupNotificationHandler();
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -89,7 +91,7 @@ function RootLayoutNav() {
     <ThemeProvider value={navigationTheme}>
       <StatusBar style={name === 'dark' ? 'light' : 'dark'} />
       <Stack
-        screenOptions={{ headerShadowVisible: false, headerTintColor: colors.text, headerTitleStyle: { fontFamily: fonts.bodyBold } }}>
+        screenOptions={{ headerShadowVisible: false, headerBackTitle: 'Back', headerTintColor: colors.text, headerTitleStyle: { fontFamily: fonts.bodyBold } }}>
         <Stack.Protected guard={signedIn && hasProfile}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="match/[id]" options={{ title: 'Match' }} />
@@ -109,6 +111,8 @@ function RootLayoutNav() {
           <Stack.Screen name="admin/admins" options={{ title: 'Manage admins' }} />
           <Stack.Screen name="player/[id]" options={{ title: 'Player' }} />
           <Stack.Screen name="settings" options={{ title: 'Settings', presentation: 'modal' }} />
+          <Stack.Screen name="notifications" options={{ title: 'Alerts' }} />
+          <Stack.Screen name="welcome" options={{ title: 'Welcome', presentation: 'modal' }} />
         </Stack.Protected>
         <Stack.Protected guard={signedIn && !hasProfile}>
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />

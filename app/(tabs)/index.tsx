@@ -1,11 +1,11 @@
-import { Link } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, View } from 'react-native';
 
 import { LogoWordmark } from '@/components/Logo';
 import { PlayPrefs } from '@/components/PlayPrefs';
 import { SkillGuide, skillLabel } from '@/components/SkillPicker';
-import { Avatar, Body, Button, Card, Chip, Field, Heading, ListRow, Screen, SectionHeader, Segmented } from '@/components/ui';
+import { Avatar, Body, Button, Card, Chip, Heading, InfoDrop, ListRow, Screen, SearchField, SectionHeader, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { formatMiles, initialsOf } from '@/lib/format';
 import { getCurrentLocation, getLocationIfAllowed, LatLng, LocationError } from '@/lib/location';
@@ -13,6 +13,8 @@ import { formatTags } from '@/lib/play';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
+import { useUnreadCount } from '@/lib/notifications';
+import { useClearOnBlur } from '@/lib/use-clear-on-blur';
 
 type Duration = '1h' | '2h' | 'tonight';
 
@@ -73,6 +75,15 @@ export default function PlayScreen() {
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState<LatLng | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+
+  useClearOnBlur(() => setQuery(''));
+  const unread = useUnreadCount(!demoMode && Boolean(userId));
+  const reloadUnread = unread.reload;
+  useFocusEffect(
+    useCallback(() => {
+      reloadUnread();
+    }, [reloadUnread]),
+  );
 
   const searching = query.trim().length >= 2;
   const q = query.trim().toLowerCase();
@@ -186,31 +197,51 @@ export default function PlayScreen() {
     <Screen>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44 }}>
         <LogoWordmark width={130} />
+        {demoMode ? null : (
+          <Link href="/notifications" asChild>
+            <Button label={unread.count > 0 ? `Alerts (${unread.count})` : 'Alerts'} variant={unread.count > 0 ? 'primary' : 'outline'} size="sm" />
+          </Link>
+        )}
       </View>
 
-      <Card style={{ padding: 16, gap: 14, borderRadius: 20 }}>
+      <Card highlighted={looking} style={{ padding: 16, gap: 14, borderRadius: 20 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <View style={{ flex: 1, gap: 2 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: looking ? colors.accentFill : colors.borderStrong }} />
-              <Heading size={18}>{looking ? 'LOOKING TO PLAY' : 'NOT LOOKING'}</Heading>
+              <Heading size={18}>LOOKING TO PLAY</Heading>
             </View>
             <Body size={13} tone="muted">
-              {looking
-                ? `Shown nearby ${durations.find((d) => d.value === duration)!.until}, as a rough distance`
-                : 'Nobody nearby can see you'}
+              {looking ? `On ${durations.find((d) => d.value === duration)!.until}` : 'Off. Tap Go to turn it on'}
             </Body>
           </View>
           <Button
-            label={busy ? '…' : looking ? 'Stop' : 'Go'}
-            variant={looking ? 'outline' : 'primary'}
+            label={busy ? '…' : looking ? 'Turn off' : 'Go'}
+            variant={looking ? 'danger' : 'primary'}
             size="sm"
             disabled={busy}
             onPress={toggleLooking}
           />
         </View>
-        <Segmented accent value={duration} onChange={setDuration} options={durations.map(({ value, label }) => ({ value, label }))} />
+        <Body size={13} tone="muted">
+          {looking
+            ? 'You are on. Players nearby can see you (only a rough distance) and challenge you, and you show up in their search. Turn it off any time.'
+            : 'Turn this on when you want a game. Players nearby will see you and can send you challenges.'}
+        </Body>
+        {!looking ? <Segmented accent value={duration} onChange={setDuration} options={durations.map(({ value, label }) => ({ value, label }))} /> : null}
       </Card>
+
+      <InfoDrop title="How does Looking to Play work?">
+        <Body size={13} tone="muted">
+          Tap Go and your rough location is shared so players nearby can find you. It turns itself off when your time is up, or tap Turn off.
+        </Body>
+        <Body size={13} tone="muted">
+          While it&apos;s on you are looking for challenges and players to play with nearby. Tap anyone below to challenge them, or search a username to find someone specific.
+        </Body>
+        <Body size={13} tone="muted">
+          Other players only ever see a rough distance, never your exact spot.
+        </Body>
+      </InfoDrop>
 
       <Card style={{ padding: 16, gap: 12 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -227,15 +258,7 @@ export default function PlayScreen() {
         {showPrefs ? <PlayPrefs /> : null}
       </Card>
 
-      <Field
-        label="Find a player"
-        placeholder="Search by username"
-        autoCapitalize="none"
-        autoCorrect={false}
-        value={query}
-        onChangeText={setQuery}
-        returnKeyType="search"
-      />
+      <SearchField label="Find a player" placeholder="Search by username" value={query} onChangeText={setQuery} />
 
       {!searching ? (
         <View style={{ gap: 8 }}>
@@ -273,7 +296,7 @@ export default function PlayScreen() {
                   left={<Avatar initials={initialsOf(player.name)} />}
                   title={player.name}
                   subtitle={[`@${player.username}`, skillLabel(player.skill), player.distance, formatTags(player)].filter(Boolean).join(' · ')}
-                  right={<Body tone="accent" weight="bold" size={14}>Team up</Body>}
+                  right={<Body tone="accent" weight="bold" size={14}>Challenge</Body>}
                 />
               </Pressable>
             </Link>

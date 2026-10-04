@@ -4,7 +4,7 @@ import { Alert, Pressable, View } from 'react-native';
 
 import { CourtMap } from '@/components/CourtMap';
 import { LightsPicker, LightsValue, saveLights } from '@/components/LightsPicker';
-import { Body, Button, Chip, Field, ListRow, Screen, Segmented } from '@/components/ui';
+import { Body, Button, Chip, Field, InfoDrop, ListRow, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { courtMeta, courtsNear, createPrivateCourt, findGoogleCourts, GoogleCourt, useCourts } from '@/lib/courts';
 import { formatMiles } from '@/lib/format';
@@ -139,6 +139,20 @@ export default function NewCourtScreen() {
 
   return (
     <Screen>
+      <InfoDrop title="How do I add a court?">
+        <Body size={13} tone="muted">
+          1. Check the list below first. If your court is already on Sickle, tap it instead of adding it again.
+        </Body>
+        <Body size={13} tone="muted">
+          2. Pick Public (everyone can play there, an admin checks it first) or Private (a backyard or gated court, only you and your friends see it).
+        </Body>
+        <Body size={13} tone="muted">
+          3. Put the pin right on the courts, give it a name, and say how many courts and if it has lights.
+        </Body>
+        <Body size={13} tone="muted">
+          Rules: you can add 3 courts a day. A private court can&apos;t be within 200 feet of a public court, so use the public one there.
+        </Body>
+      </InfoDrop>
       {listedNearby.length > 0 ? (
         <View style={{ gap: 8 }}>
           <Body size={13} weight="semibold" tone="muted">
@@ -176,7 +190,7 @@ export default function NewCourtScreen() {
         <Body size={13} tone="muted">
           {visibility === 'public'
             ? 'Everyone can find and play here. An admin checks it first, then it goes on the map.'
-            : 'Saved right away. Only you and your friends can see it, and it is never sent to an admin. You can\'t make one where a public court already is.'}
+            : 'Saved right away. Only you and your friends can see it, and it is never sent to an admin. It can\'t be within 200 feet of a public court. Use the public one instead.'}
         </Body>
       </View>
       <Body tone="muted">Put the pin right on the courts. Tap the map or drag the pin to move it.</Body>

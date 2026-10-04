@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
 import { BestOf, GameScore } from '@/lib/scores';
@@ -214,6 +214,38 @@ export async function fetchMyTeams(demoMode: boolean): Promise<TeamRow[]> {
   if (!all.error) return (all.data ?? []) as TeamRow[];
   const { data } = await supabase.rpc('my_teams');
   return (data ?? []) as TeamRow[];
+}
+
+// "Jack Thompson and Tyler Kim" for each team, to show under team names. Empty
+// on a database from before the round 2 update, so screens just skip the line.
+export async function fetchTeamPlayers(demoMode: boolean, teamIds: string[]): Promise<Record<string, string>> {
+  if (teamIds.length === 0) return {};
+  if (demoMode || !supabase) {
+    const out: Record<string, string> = {};
+    for (const id of teamIds) {
+      const t = demoTeams.find((x) => x.team_id === id);
+      out[id] = t ? (t.is_singles ? 'Just you' : `You and ${t.partner_name}`) : 'Two players';
+    }
+    return out;
+  }
+  const { data, error } = await supabase.rpc('team_players', { p_teams: teamIds });
+  if (error) return {};
+  const out: Record<string, string> = {};
+  for (const row of (data ?? []) as { team_id: string; players: string }[]) out[row.team_id] = row.players;
+  return out;
+}
+
+export function useTeamPlayers(demoMode: boolean, teams: { team_id: string }[]) {
+  const key = teams.map((t) => t.team_id).sort().join(',');
+  const [players, setPlayers] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let alive = true;
+    fetchTeamPlayers(demoMode, key ? key.split(',') : []).then((p) => alive && setPlayers(p));
+    return () => {
+      alive = false;
+    };
+  }, [demoMode, key]);
+  return players;
 }
 
 export async function fetchPlayerTeams(demoMode: boolean, profileId: string): Promise<TeamRow[]> {

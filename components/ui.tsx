@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -314,6 +314,98 @@ export function Field({
           style,
         ]}
       />
+    </View>
+  );
+}
+
+// A search box with an X that clears it in one tap.
+export function SearchField({
+  label,
+  value,
+  onChangeText,
+  style,
+  ...props
+}: TextInputProps & { label: string; value: string; onChangeText: (text: string) => void; style?: StyleProp<TextStyle> }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ gap: 6 }}>
+      <Body size={13} weight="semibold" tone="muted">
+        {label}
+      </Body>
+      <View>
+        <TextInput
+          accessibilityLabel={label}
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          {...props}
+          value={value}
+          onChangeText={onChangeText}
+          style={[
+            {
+              height: 48,
+              paddingLeft: 14,
+              paddingRight: 44,
+              borderRadius: radius.md,
+              borderWidth: 1,
+              borderColor: colors.borderStrong,
+              backgroundColor: colors.surface,
+              color: colors.text,
+              fontFamily: fonts.bodyMedium,
+              fontSize: 16,
+            },
+            style,
+          ]}
+        />
+        {value.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+            hitSlop={8}
+            onPress={() => onChangeText('')}
+            style={{ position: 'absolute', right: 6, top: 0, bottom: 0, width: 36, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center' }}>
+              <Body size={13} weight="bold" style={{ color: colors.background, lineHeight: 16 }}>
+                ✕
+              </Body>
+            </View>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+// A small "what is this?" row that opens to a short explanation.
+export function InfoDrop({ title, children, startOpen = false }: { title: string; children: ReactNode; startOpen?: boolean }) {
+  const { colors } = useTheme();
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: 'hidden' }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen(!open)}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 }}>
+        <Body size={13} weight="bold" tone="accent">
+          {open ? '▾' : '▸'}
+        </Body>
+        <Body size={13} weight="semibold" style={{ flex: 1 }}>
+          {title}
+        </Body>
+      </Pressable>
+      {open ? (
+        <View style={{ paddingHorizontal: 12, paddingBottom: 12, gap: 6 }}>
+          {typeof children === 'string' ? (
+            <Body size={13} tone="muted">
+              {children}
+            </Body>
+          ) : (
+            children
+          )}
+        </View>
+      ) : null}
     </View>
   );
 }

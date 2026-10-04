@@ -39,6 +39,11 @@ do $$ begin
   assert (select count(*) from public.teams where player_high is null and player_low::text like '00000000-0000-0000-0000-00000000ad0%') = 4, 'four singles teams';
 end $$;
 
+-- Teams are friends only.
+insert into public.friendships (requester_id, addressee_id, status, accepted_at) values
+  ('00000000-0000-0000-0000-00000000ad01', '00000000-0000-0000-0000-00000000ad03', 'accepted', now()),
+  ('00000000-0000-0000-0000-00000000ad04', '00000000-0000-0000-0000-00000000ad02', 'accepted', now());
+
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ad01';
 do $$ begin

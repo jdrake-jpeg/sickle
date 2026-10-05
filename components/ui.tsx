@@ -1,10 +1,6 @@
-import { router } from 'expo-router';
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { ReactNode, useState } from 'react';
 import {
-  Animated,
   KeyboardAvoidingView,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -63,72 +59,9 @@ export function Body({
   return <Text {...props} style={[{ fontFamily, fontSize: size, color }, style]} />;
 }
 
-// The help bar stays out of the way until someone scrolls to the bottom of a
-// page, then slides up from the bottom edge.
-const helpRoom = 120;
-
-function HelpSlideUp({ show, onClose }: { show: boolean; onClose: () => void }) {
+export function Screen({ children, scroll = true }: { children: ReactNode; scroll?: boolean }) {
   const { colors } = useTheme();
-  const y = useRef(new Animated.Value(180)).current;
-  useEffect(() => {
-    Animated.timing(y, { toValue: show ? 0 : 180, duration: 240, useNativeDriver: true }).start();
-  }, [show, y]);
-  return (
-    <Animated.View
-      pointerEvents={show ? 'auto' : 'none'}
-      style={{
-        position: 'absolute',
-        left: 16,
-        right: 16,
-        bottom: 12,
-        transform: [{ translateY: y }],
-        shadowColor: '#000',
-        shadowOpacity: 0.25,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 8,
-      }}>
-      <Card style={{ padding: 14, gap: 8, alignItems: 'center' }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-          hitSlop={8}
-          onPress={onClose}
-          style={{ position: 'absolute', top: 2, right: 2, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textMuted }}>✕</Text>
-        </Pressable>
-        <Body size={13} tone="muted" style={{ textAlign: 'center', paddingHorizontal: 28 }}>
-          Trouble finding something or have questions?
-        </Body>
-        <Button label="How Sickle works" variant="outline" size="sm" onPress={() => router.push('/help')} />
-      </Card>
-    </Animated.View>
-  );
-}
-
-export function Screen({ children, scroll = true, help = true }: { children: ReactNode; scroll?: boolean; help?: boolean }) {
-  const { colors } = useTheme();
-  const [atBottom, setAtBottom] = useState(false);
-  const [closed, setClosed] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
-  const showHelp = atBottom && !closed;
   const content = <View style={styles.screenContent}>{children}</View>;
-
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!help) return;
-    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-    const scrollable = contentSize.height > layoutMeasurement.height + 40;
-    const bottom = scrollable && contentOffset.y + layoutMeasurement.height >= contentSize.height - 40;
-    setAtBottom(bottom);
-    // Scroll away from the bottom and it can pop up again next time.
-    if (!bottom) setClosed(false);
-  };
-
-  // The page rises with the popup, so it never covers anything.
-  useEffect(() => {
-    if (showHelp) setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 30);
-  }, [showHelp]);
-
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
       {scroll ? (
@@ -136,20 +69,16 @@ export function Screen({ children, scroll = true, help = true }: { children: Rea
         // into view; Android shrinks the screen above the keyboard.
         <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" enabled={Platform.OS === 'android'}>
           <ScrollView
-            ref={scrollRef}
-            contentContainerStyle={{ paddingBottom: space.xxl + (showHelp ? helpRoom : 0) }}
+            contentContainerStyle={{ paddingBottom: space.xxl }}
             automaticallyAdjustKeyboardInsets
             keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive"
-            scrollEventThrottle={64}
-            onScroll={onScroll}>
+            keyboardDismissMode="interactive">
             {content}
           </ScrollView>
         </KeyboardAvoidingView>
       ) : (
         content
       )}
-      {scroll && help ? <HelpSlideUp show={showHelp} onClose={() => setClosed(true)} /> : null}
     </SafeAreaView>
   );
 }

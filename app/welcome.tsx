@@ -15,7 +15,7 @@ const steps: { title: string; body: string }[] = [
 export default function WelcomeScreen() {
   const { width } = useWindowDimensions();
   return (
-    <Screen help={false}>
+    <Screen>
       <View style={{ alignItems: 'center', gap: 4, paddingTop: 8 }}>
         <Logo width={Math.min(width - 48, 340)} />
         <Display size={32}>WELCOME</Display>

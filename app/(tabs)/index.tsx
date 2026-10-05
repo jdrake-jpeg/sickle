@@ -288,6 +288,9 @@ export default function PlayScreen() {
       <Link href="/friends" asChild>
         <Button label="Find people" variant="outline" />
       </Link>
+      <Link href="/help" asChild>
+        <Button label="How Sickle works" variant="ghost" size="sm" />
+      </Link>
     </Screen>
   );
 }

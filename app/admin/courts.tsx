@@ -5,7 +5,7 @@ import { CourtMap } from '@/components/CourtMap';
 import { Body, Button, Card, Field, Heading, ListRow, Screen, SectionHeader } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { courtMeta, fetchPendingCourts, findGoogleCourts, GoogleCourt, openDirections, PendingCourt, useCourts } from '@/lib/courts';
-import { getLocationIfAllowed, rexburg } from '@/lib/location';
+import { getLocationIfAllowed } from '@/lib/location';
 import { useProfile } from '@/lib/profile';
 import { supabase } from '@/lib/supabase';
 
@@ -27,7 +27,7 @@ export default function ReviewCourtsScreen() {
   useEffect(() => {
     if (demoMode || !courts || google) return;
     getLocationIfAllowed()
-      .then((spot) => findGoogleCourts(spot ?? rexburg, courts))
+      .then((spot) => (spot ? findGoogleCourts(spot, courts) : []))
       .then(setGoogle);
   }, [demoMode, courts, google]);
 

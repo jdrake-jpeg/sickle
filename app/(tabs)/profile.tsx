@@ -219,6 +219,9 @@ export default function ProfileScreen() {
       <Link href="/rules" asChild>
         <Button label="Pickleball rules" variant="outline" />
       </Link>
+      <Link href="/help" asChild>
+        <Button label="How Sickle works" variant="ghost" size="sm" />
+      </Link>
 
     </Screen>
   );

@@ -16,7 +16,6 @@ import {
   fetchLeaderboard,
   fetchMyTeamIds,
   fetchPendingCourts,
-  findGoogleCourts,
   GoogleCourt,
   nearbyCourts,
   nearbyMiles,
@@ -25,7 +24,8 @@ import {
   widerMiles,
 } from '@/lib/courts';
 import { formatMiles } from '@/lib/format';
-import { getLocationIfAllowed, LatLng, rexburg } from '@/lib/location';
+import { getCurrentLocation, getLocationIfAllowed, LatLng } from '@/lib/location';
+import { useMappedCourts } from '@/lib/nearby-courts';
 import { timeAgo } from '@/lib/matches';
 import { championWins } from '@/lib/play';
 import { useProfile } from '@/lib/profile';
@@ -46,8 +46,6 @@ export default function CourtsScreen() {
   const [standings, setStandings] = useState<Record<string, Standing>>({});
   const [pendingCount, setPendingCount] = useState(0);
   const [here, setHere] = useState<LatLng | null>(null);
-  const [located, setLocated] = useState(false);
-  const [suggestions, setSuggestions] = useState<GoogleCourt[]>([]);
   const [latest, setLatest] = useState<Record<string, { condition: Condition; created_at: string }>>({});
   const [query, setQuery] = useState('');
   const [wide, setWide] = useState(false);
@@ -56,15 +54,22 @@ export default function CourtsScreen() {
   useEffect(() => {
     getLocationIfAllowed().then((spot) => {
       setHere(spot);
-      setLocated(true);
     });
   }, []);
 
-  // Mapped pickleball courts nearby that aren't on Sickle yet.
-  useEffect(() => {
-    if (demoMode || !courts || !located) return;
-    findGoogleCourts(here ?? rexburg, courts).then(setSuggestions);
-  }, [demoMode, courts, located, here]);
+  // Mapped pickleball courts nearby. Ones within 5 miles are added for you; the
+  // rest show as pins you can add.
+  const mapped = useMappedCourts(here, courts, reload, wide ? widerMiles : nearbyMiles);
+  const suggestions = mapped.suggestions;
+  const suggestionsPaged = usePaged(suggestions, 3, 3);
+
+  const allowLocation = async () => {
+    try {
+      setHere(await getCurrentLocation());
+    } catch (e) {
+      Alert.alert('Location', e instanceof Error ? e.message : 'Something went wrong.');
+    }
+  };
 
   // Refresh when coming back from adding or reviewing a court.
   useFocusEffect(
@@ -82,7 +87,8 @@ export default function CourtsScreen() {
   const near = useMemo(() => nearbyCourts(here, courts ?? [], nearbyMiles), [here, courts]);
   const farther = useMemo(() => nearbyCourts(here, courts ?? [], widerMiles), [here, courts]);
   const results = useMemo(() => searchCourts(here, courts ?? [], query), [here, courts, query]);
-  const inRange: CourtWithMiles[] = wide ? farther : near;
+  // Courts only show for where you are. Nothing shows until we know that.
+  const inRange: CourtWithMiles[] = here ? (wide ? farther : near) : [];
   const pool: CourtWithMiles[] = searching ? results : inRange;
   const paged = usePaged(pool, listSize, listSize);
   const shown = paged.shown;
@@ -139,7 +145,7 @@ export default function CourtsScreen() {
           try {
             const id = await addMapCourt(demoMode, g);
             await reload();
-            setSuggestions((list) => list.filter((x) => x.place_id !== g.place_id));
+            mapped.remove(g.place_id);
             router.push(`/court/${id}`);
           } catch (e) {
             Alert.alert("Couldn't add it", e instanceof Error ? e.message : 'Try again.');
@@ -185,13 +191,19 @@ export default function CourtsScreen() {
       ) : null}
 
       <SearchField label="Search courts" placeholder="Court name or street" value={query} onChangeText={setQuery} />
-      {searching ? null : (
+      {searching ? null : !here ? (
+        <Card style={{ padding: 16, gap: 10 }}>
+          <Body weight="semibold">See courts near you</Body>
+          <Body tone="muted">Allow your location to find pickleball courts within 10 miles.</Body>
+          <Button label="Use my location" onPress={allowLocation} />
+        </Card>
+      ) : (
         <>
           <CourtMap
             height={240}
             center={here}
             showsUserLocation={Boolean(here)}
-            courts={(here ? inRange : (courts ?? [])).map((c) => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, subtitle: courtMeta(c) }))}
+            courts={inRange.map((c) => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, subtitle: courtMeta(c) }))}
             onCourtPress={(id) => router.push(`/court/${id}`)}
             suggestions={suggestions.map((g) => ({ id: g.place_id, name: g.name, lat: g.lat, lng: g.lng }))}
             onSuggestionPress={(placeId) => {
@@ -211,9 +223,9 @@ export default function CourtsScreen() {
             ON THE MAP, NOT ON SICKLE YET
           </Heading>
           <Body size={13} tone="muted">
-            Gray pins are mapped pickleball courts. Tap Add to make one a Sickle court.
+            Gray pins are mapped courts. Tap Add to put one on Sickle.
           </Body>
-          {suggestions.map((g) => (
+          {suggestionsPaged.shown.map((g) => (
             <Card key={g.place_id} style={{ padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ flex: 1 }}>
                 <Body weight="semibold">{g.name}</Body>
@@ -226,10 +238,11 @@ export default function CourtsScreen() {
               <Button label={adding === g.place_id ? 'Adding…' : 'Add'} size="sm" disabled={adding !== null} onPress={() => addFromMap(g)} />
             </Card>
           ))}
+          <ShowMore hasMore={suggestionsPaged.hasMore} remaining={suggestionsPaged.remaining} onPress={suggestionsPaged.more} />
         </View>
       ) : null}
 
-      {courts && courts.length === 0 ? (
+      {here && courts && courts.length === 0 ? (
         <Card style={{ padding: 16, gap: 6 }}>
           <Body weight="semibold">No courts yet</Body>
           <Body tone="muted">Add the one you play at.</Body>

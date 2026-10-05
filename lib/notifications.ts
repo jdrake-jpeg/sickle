@@ -148,6 +148,16 @@ export async function markAllRead() {
   await supabase?.rpc('mark_notifications_read');
 }
 
+export async function markRead(id: string) {
+  await supabase?.rpc('mark_notification_read', { p_id: id });
+}
+
+// Deletes every alert for you. Needs the newest database update.
+export async function clearAll(): Promise<void> {
+  const { error } = (await supabase?.rpc('clear_notifications')) ?? { error: null };
+  if (error) throw new Error(error.message);
+}
+
 // Number of unread notifications, refreshed on focus and every minute.
 export function useUnreadCount(enabled: boolean) {
   const [count, setCount] = useState(0);

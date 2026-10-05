@@ -1,21 +1,26 @@
-import { Link, router, Stack } from 'expo-router';
+import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, useWindowDimensions, View } from 'react-native';
+import { Alert, Pressable, useWindowDimensions, View } from 'react-native';
 
 import { CourtMap } from '@/components/CourtMap';
-import { Body, Button, Screen } from '@/components/ui';
+import { Body, Button, ListRow, Screen, SearchField } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { addMapCourt, courtMeta, courtsNear, GoogleCourt, useCourts, widerMiles } from '@/lib/courts';
+import { addMapCourt, courtMeta, GoogleCourt, searchCourts, useCourts, widerMiles } from '@/lib/courts';
 import { getCurrentLocation, getLocationIfAllowed, LatLng } from '@/lib/location';
 import { useMappedCourts } from '@/lib/nearby-courts';
 
-// The courts map, as big as the screen. Red pins are Sickle courts, gray pins
-// are mapped pickleball courts you can add with one tap.
+// The courts map, as big as the screen. Red pins are every Sickle court, so
+// you can pan anywhere. Gray pins are mapped courts within 25 miles of you that
+// you can add with one tap. Opened from a court's page, it starts on that court.
 export default function CourtMapScreen() {
+  const { lat, lng } = useLocalSearchParams<{ lat?: string; lng?: string }>();
+  const focused: LatLng | null = lat && lng && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) ? { lat: Number(lat), lng: Number(lng) } : null;
   const { demoMode } = useAuth();
   const { courts, reload } = useCourts();
   const { height } = useWindowDimensions();
   const [here, setHere] = useState<LatLng | null>(null);
+  const [look, setLook] = useState<LatLng | null>(focused);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     getLocationIfAllowed().then((spot) => {
@@ -26,7 +31,8 @@ export default function CourtMapScreen() {
   // Courts and mapped courts within 25 miles of you.
   const mapped = useMappedCourts(here, courts, reload, widerMiles);
   const suggestions = mapped.suggestions;
-  const inRange = here ? courtsNear(here, courts ?? []).filter((c) => c.miles !== null && c.miles <= widerMiles) : [];
+  // Search every court on the map, not just the near ones.
+  const results = searchCourts(here, courts ?? [], query).slice(0, 5);
 
   const allowLocation = async () => {
     try {
@@ -57,29 +63,34 @@ export default function CourtMapScreen() {
   return (
     <Screen scroll={false}>
       <Stack.Screen options={{ title: 'Courts map' }} />
-      {here ? null : (
-        <View style={{ gap: 10 }}>
-          <Body tone="muted">Allow your location to see courts within 25 miles.</Body>
-          <Button label="Use my location" onPress={allowLocation} />
-        </View>
-      )}
-      {here ? (
-        <CourtMap
-          height={Math.max(300, height - 250)}
-          center={here}
-          showsUserLocation={Boolean(here)}
-          courts={inRange.map((c) => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, subtitle: courtMeta(c) }))}
-          onCourtPress={(id) => router.push(`/court/${id}`)}
-          suggestions={suggestions.map((g) => ({ id: g.place_id, name: g.name, lat: g.lat, lng: g.lng }))}
-          onSuggestionPress={(placeId) => {
-            const g = suggestions.find((x) => x.place_id === placeId);
-            if (g) add(g);
-          }}
-        />
-      ) : null}
+      <SearchField label="Find a court on the map" placeholder="Court name or street" value={query} onChangeText={setQuery} />
+      {results.map((c) => (
+        <Pressable
+          key={c.id}
+          accessibilityRole="button"
+          onPress={() => {
+            setLook({ lat: c.lat, lng: c.lng });
+            setQuery('');
+          }}>
+          <ListRow title={c.name} subtitle={[c.address, courtMeta(c)].filter(Boolean).join(' · ')} />
+        </Pressable>
+      ))}
+      <CourtMap
+        height={Math.max(260, height - (results.length > 0 ? 250 + results.length * 64 : 340))}
+        center={look ?? here}
+        showsUserLocation={Boolean(here)}
+        courts={(courts ?? []).map((c) => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, subtitle: courtMeta(c) }))}
+        onCourtPress={(id) => router.push(`/court/${id}`)}
+        suggestions={suggestions.map((g) => ({ id: g.place_id, name: g.name, lat: g.lat, lng: g.lng }))}
+        onSuggestionPress={(placeId) => {
+          const g = suggestions.find((x) => x.place_id === placeId);
+          if (g) add(g);
+        }}
+      />
+      {here ? null : <Button label="Use my location" variant="outline" size="sm" onPress={allowLocation} />}
       <View style={{ gap: 8 }}>
         <Body size={13} tone="muted">
-          Red pins are Sickle courts within 25 miles. Gray pins are mapped courts you can add. Tap a pin, then its name.
+          Red pins are Sickle courts. Gray pins are mapped courts near you that you can add. Tap a pin, then its name.
         </Body>
         <Link href="/court/new" asChild>
           <Button label="Add a court that isn't on the map" variant="outline" size="sm" />

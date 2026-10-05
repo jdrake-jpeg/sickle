@@ -128,7 +128,16 @@ export default function CourtScreen() {
       </View>
 
       <CourtMap height={160} interactive={false} center={court} courts={[{ id: court.id, name: court.name, lat: court.lat, lng: court.lng }]} />
-      <Button label="Directions" variant="outline" size="sm" onPress={() => openDirections(court)} />
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <Button label="Directions" variant="outline" size="sm" style={{ flex: 1 }} onPress={() => openDirections(court)} />
+        <Button
+          label="Full screen map"
+          variant="outline"
+          size="sm"
+          style={{ flex: 1 }}
+          onPress={() => router.push({ pathname: '/court/map', params: { lat: String(court.lat), lng: String(court.lng) } })}
+        />
+      </View>
 
       {court.is_private ? (
         <Card style={{ padding: 14, gap: 8 }}>

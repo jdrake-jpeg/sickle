@@ -4,6 +4,7 @@ import { Alert, Linking, Pressable, View } from 'react-native';
 
 import { FilterChips, FilterGroup, Filters } from '@/components/Filters';
 import { LogoWordmark } from '@/components/Logo';
+import { nextHalfHour, TimeField, whenText } from '@/components/TimeWheel';
 import { LookingFor } from '@/components/PlayPrefs';
 import { ShowMore, usePaged } from '@/components/ShowMore';
 import { RatingGuide, ratingText } from '@/components/SkillPicker';
@@ -19,19 +20,25 @@ import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
 
-type Duration = '1h' | '2h' | 'tonight';
+type Duration = '1h' | '2h' | 'tonight' | 'custom';
 
-const durations: { value: Duration; label: string; until: string }[] = [
-  { value: '1h', label: '1 hour', until: 'for the next hour' },
-  { value: '2h', label: '2 hours', until: 'for the next 2 hours' },
-  { value: 'tonight', label: 'Tonight', until: 'until 11:59 PM' },
+const durations: { value: Duration; label: string }[] = [
+  { value: '1h', label: '1 hour' },
+  { value: '2h', label: '2 hours' },
+  { value: 'tonight', label: 'Tonight' },
+  { value: 'custom', label: 'Pick time' },
 ];
+
+// The most a player can be "looking" for is 24 hours.
+const latestEnd = () => new Date(Date.now() + 23 * 60 * 60 * 1000 + 59 * 60 * 1000);
+const clock = (d: Date) => d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
 type Radius = '1' | '5' | '10' | '25';
 
 type Player = { id: string; name: string; username: string; skill: number | null; distance: string | null; plays_singles?: boolean; plays_doubles?: boolean };
 
-function endTime(duration: Duration) {
+function endTime(duration: Duration, custom: Date) {
+  if (duration === 'custom') return custom;
   const now = new Date();
   if (duration === '1h') return new Date(now.getTime() + 60 * 60 * 1000);
   if (duration === '2h') return new Date(now.getTime() + 2 * 60 * 60 * 1000);
@@ -61,6 +68,10 @@ export default function PlayScreen() {
   const [looking, setLooking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [duration, setDuration] = useState<Duration>('2h');
+  // The end time when you pick one yourself. Starts 2 hours from now.
+  const [customEnd, setCustomEnd] = useState(() => nextHalfHour());
+  // When Looking to Play turns off, if it's on.
+  const [until, setUntil] = useState<Date | null>(null);
   const [settings, setSettings] = useState<PlaySettings | null>(defaultPlaySettings);
   const [location, setLocation] = useState<LatLng | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -85,7 +96,10 @@ export default function PlayScreen() {
       .eq('id', userId)
       .maybeSingle()
       .then(({ data }) => {
-        if (data?.availability === 'looking_to_play' && new Date(data.availability_expires_at) > new Date()) setLooking(true);
+        if (data?.availability === 'looking_to_play' && new Date(data.availability_expires_at) > new Date()) {
+          setLooking(true);
+          setUntil(new Date(data.availability_expires_at));
+        }
       });
     getLocationIfAllowed().then(setLocation);
   }, [demoMode, userId]);
@@ -146,17 +160,25 @@ export default function PlayScreen() {
         const { error } = await supabase.rpc('set_looking_to_play', { p_on: false });
         if (error) throw error;
         setLooking(false);
+        setUntil(null);
       } else {
+        const end = endTime(duration, customEnd);
+        if (end.getTime() <= Date.now() + 60_000) {
+          Alert.alert('Pick a later time', 'The time has to be at least a minute from now.');
+          setBusy(false);
+          return;
+        }
         const here = await getCurrentLocation();
         setLocation(here);
         const { error } = await supabase.rpc('set_looking_to_play', {
           p_on: true,
-          p_until: endTime(duration).toISOString(),
+          p_until: end.toISOString(),
           p_lat: here.lat,
           p_lng: here.lng,
         });
         if (error) throw error;
         setLooking(true);
+        setUntil(end);
       }
     } catch (error) {
       showLocationError(error);
@@ -194,7 +216,7 @@ export default function PlayScreen() {
               <Heading size={18}>LOOKING TO PLAY</Heading>
             </View>
             <Body size={13} tone="muted">
-              {looking ? `On ${durations.find((d) => d.value === duration)!.until}.` : 'Off.'}
+              {looking ? (until ? `On until ${clock(until)}.` : 'On.') : 'Off.'}
             </Body>
           </View>
           <Button
@@ -214,9 +236,18 @@ export default function PlayScreen() {
             {!looking ? (
               <View style={{ gap: 6 }}>
                 <Body size={13} weight="semibold" tone="muted">
-                  How long
+                  When are you looking to play?
                 </Body>
                 <Segmented accent value={duration} onChange={setDuration} options={durations.map(({ value, label }) => ({ value, label }))} />
+                {duration === 'custom' ? (
+                  <TimeField
+                    title="Looking to play until"
+                    value={customEnd}
+                    display={`Until ${whenText(customEnd)}`}
+                    maxDays={2}
+                    onChange={(d) => setCustomEnd(d.getTime() > latestEnd().getTime() ? latestEnd() : d)}
+                  />
+                ) : null}
               </View>
             ) : null}
           </View>

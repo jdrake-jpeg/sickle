@@ -68,15 +68,15 @@ export function PlayPrefs() {
         />
         <Body size={13} tone="muted">
           {settings.challenges_from === 'everyone'
-            ? 'Anyone can send you a challenge.'
+            ? 'Anyone can challenge you.'
             : settings.challenges_from === 'friends'
-              ? 'Only your friends can send you challenges.'
-              : 'Paused. Nobody can challenge you until you turn this back on.'}
+              ? 'Only friends can challenge you.'
+              : 'Paused. Nobody can challenge you.'}
         </Body>
       </View>
-      {toggle('Open to singles', 'Show up when people look for singles players.', settings.plays_singles, (v) => change({ plays_singles: v }))}
-      {toggle('Open to doubles', 'Show up when people look for doubles partners and teams.', settings.plays_doubles, (v) => change({ plays_doubles: v }))}
-      {toggle('Take friend requests', 'Turn off to stop new friend requests. Friends you already have stay.', settings.friend_requests, (v) => change({ friend_requests: v }))}
+      {toggle('Open to singles', 'Show up when people look for singles.', settings.plays_singles, (v) => change({ plays_singles: v }))}
+      {toggle('Open to doubles', 'Show up when people look for doubles.', settings.plays_doubles, (v) => change({ plays_doubles: v }))}
+      {toggle('Take friend requests', 'Turn off to stop new requests. Current friends stay.', settings.friend_requests, (v) => change({ friend_requests: v }))}
     </View>
   );
 }
@@ -84,7 +84,7 @@ export function PlayPrefs() {
 // The short version for the Looking to Play card: what you're looking for and who
 // can challenge you. Settings has the full list.
 export function LookingFor({ settings, onChange }: { settings: PlaySettings; onChange: (next: Partial<PlaySettings>) => void }) {
-  type Kind = 'singles' | 'doubles' | 'both';
+  type Kind = 'both' | 'singles' | 'doubles';
   const kind: Kind = settings.plays_singles && settings.plays_doubles ? 'both' : settings.plays_singles ? 'singles' : 'doubles';
   return (
     <View style={{ gap: 12 }}>
@@ -97,9 +97,9 @@ export function LookingFor({ settings, onChange }: { settings: PlaySettings; onC
           value={kind}
           onChange={(v) => onChange({ plays_singles: v !== 'doubles', plays_doubles: v !== 'singles' })}
           options={[
+            { value: 'both', label: 'Both' },
             { value: 'singles', label: 'Singles' },
             { value: 'doubles', label: 'Doubles' },
-            { value: 'both', label: 'Both' },
           ]}
         />
       </View>

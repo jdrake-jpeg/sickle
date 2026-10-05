@@ -1,6 +1,10 @@
-import { ReactNode, useState } from 'react';
+import { router } from 'expo-router';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   KeyboardAvoidingView,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -59,9 +63,51 @@ export function Body({
   return <Text {...props} style={[{ fontFamily, fontSize: size, color }, style]} />;
 }
 
-export function Screen({ children, scroll = true }: { children: ReactNode; scroll?: boolean }) {
+// The help bar stays out of the way until someone scrolls to the bottom of a
+// page, then slides up from the bottom edge.
+function HelpSlideUp({ show }: { show: boolean }) {
+  const y = useRef(new Animated.Value(180)).current;
+  useEffect(() => {
+    Animated.timing(y, { toValue: show ? 0 : 180, duration: 240, useNativeDriver: true }).start();
+  }, [show, y]);
+  return (
+    <Animated.View
+      pointerEvents={show ? 'auto' : 'none'}
+      style={{
+        position: 'absolute',
+        left: 16,
+        right: 16,
+        bottom: 12,
+        transform: [{ translateY: y }],
+        shadowColor: '#000',
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 8,
+      }}>
+      <Card style={{ padding: 14, gap: 8, alignItems: 'center' }}>
+        <Body size={13} tone="muted" style={{ textAlign: 'center' }}>
+          Trouble finding something or have questions?
+        </Body>
+        <Button label="How Sickle works" variant="outline" size="sm" onPress={() => router.push('/help')} />
+      </Card>
+    </Animated.View>
+  );
+}
+
+export function Screen({ children, scroll = true, help = true }: { children: ReactNode; scroll?: boolean; help?: boolean }) {
   const { colors } = useTheme();
+  const [showHelp, setShowHelp] = useState(false);
   const content = <View style={styles.screenContent}>{children}</View>;
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!help) return;
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const scrollable = contentSize.height > layoutMeasurement.height + 80;
+    const atBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 40;
+    setShowHelp(scrollable && atBottom);
+  };
+
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
       {scroll ? (
@@ -72,13 +118,16 @@ export function Screen({ children, scroll = true }: { children: ReactNode; scrol
             contentContainerStyle={{ paddingBottom: space.xxl }}
             automaticallyAdjustKeyboardInsets
             keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive">
+            keyboardDismissMode="interactive"
+            scrollEventThrottle={64}
+            onScroll={onScroll}>
             {content}
           </ScrollView>
         </KeyboardAvoidingView>
       ) : (
         content
       )}
+      {scroll && help ? <HelpSlideUp show={showHelp} /> : null}
     </SafeAreaView>
   );
 }
@@ -153,14 +202,16 @@ export function Button({
   );
 }
 
-export function Chip({ label, selected, onPress }: { label: string; selected?: boolean; onPress?: () => void }) {
+export function Chip({ label, selected, onPress, disabled }: { label: string; selected?: boolean; onPress?: () => void; disabled?: boolean }) {
   const { colors } = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled }}
       onPress={onPress}
+      disabled={disabled}
       style={{
+        opacity: disabled ? 0.35 : 1,
         height: 34,
         paddingHorizontal: 14,
         borderRadius: 17,

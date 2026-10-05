@@ -1,18 +1,26 @@
 import { Link } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { RecordFilters } from '@/components/RecordFilters';
 import { ShowMore, usePaged } from '@/components/ShowMore';
 import { Body, Card } from '@/components/ui';
 import { formatWhen, HistoryRow } from '@/lib/matches';
+import { applyRecordFilter, noRecordFilter, RecordFilter } from '@/lib/record';
 import { formatScores } from '@/lib/scores';
 import { useTheme } from '@/lib/theme';
 
 // Confirmed matches: won or lost, the score, who they played against and
 // where. Tap the court to open it. In a player's history it also says who they
-// teamed up with.
+// teamed up with. Filter by singles or doubles and by same or different teams.
 export function HistoryList({ rows, empty }: { rows: HistoryRow[] | null; empty: string }) {
   const { colors } = useTheme();
-  const paged = usePaged(rows ?? [], 5);
+  const [filter, setFilter] = useState<RecordFilter>(noRecordFilter);
+  const shownRows = applyRecordFilter(
+    (rows ?? []).map((r) => ({ row: r, singles: Boolean(r.is_singles), opponent: r.opponent_id })),
+    filter,
+  ).map((x) => x.row);
+  const paged = usePaged(shownRows, 5);
   if (rows === null) return <Body tone="muted">Loading…</Body>;
   if (rows.length === 0) {
     return (
@@ -23,6 +31,12 @@ export function HistoryList({ rows, empty }: { rows: HistoryRow[] | null; empty:
   }
   return (
     <View style={{ gap: 8 }}>
+      {rows.length > 1 ? <RecordFilters filter={filter} onChange={setFilter} /> : null}
+      {shownRows.length === 0 ? (
+        <Card style={{ padding: 16 }}>
+          <Body tone="muted">No matches fit these filters.</Body>
+        </Card>
+      ) : null}
       {paged.shown.map((r) => (
         <Card key={r.challenge_id} style={{ padding: 14, gap: 6 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

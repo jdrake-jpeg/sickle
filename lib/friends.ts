@@ -83,34 +83,60 @@ export async function fetchSimilarPlayers(demoMode: boolean, format: 'singles' |
   }));
 }
 
-// Players you could play with, not your friends yet. Filter by skill group and
-// singles or doubles. Needs the 20261018 database update; before that it falls
-// back to people near your own level.
-export async function fetchBrowsePlayers(
-  demoMode: boolean,
-  range: { min: number | null; max: number | null },
-  format: 'singles' | 'doubles' | null,
-): Promise<SimilarPlayer[]> {
-  if (demoMode || !supabase) return fetchSimilarPlayers(demoMode, format);
-  const { data, error } = await supabase.rpc('browse_players', { p_min_skill: range.min, p_max_skill: range.max, p_format: format });
-  if (error) return fetchSimilarPlayers(demoMode, format);
-  return ((data ?? []) as (DbPerson & { looking_now: boolean; plays_singles: boolean; plays_doubles: boolean })[]).map((p) => ({
+// Rating groups on the DUPR scale. DUPR ratings have decimals, like 3.74.
+export const ratingRanges: { label: string; min: number | null; max: number | null }[] = [
+  { label: 'Any rating', min: null, max: null },
+  { label: 'Under 3.0', min: null, max: 2.99 },
+  { label: '3.0 to 3.9', min: 3.0, max: 3.99 },
+  { label: '4.0 to 4.9', min: 4.0, max: 4.99 },
+  { label: '5.0 and up', min: 5.0, max: null },
+];
+
+export type FindPlayer = SimilarPlayer & { mutual: number; distance: number | null };
+export type FindScope = 'people' | 'friends' | 'all';
+export type FindArgs = {
+  range: { min: number | null; max: number | null };
+  place: { lat: number; lng: number } | null;
+  miles: number | null;
+  common: boolean;
+  scope: FindScope;
+};
+
+type DbFound = DbPerson & {
+  looking_now: boolean;
+  plays_singles: boolean;
+  plays_doubles: boolean;
+  mutual_friends: number;
+  is_friend: boolean;
+  distance_miles: number | null;
+};
+
+// Players you could play with: by rating, how close, friends in common, or your
+// friends. Needs the 20261019 database update; before that it falls back to
+// people near your own level.
+export async function fetchFindPlayers(demoMode: boolean, a: FindArgs): Promise<FindPlayer[]> {
+  const plain = (rows: SimilarPlayer[]): FindPlayer[] => rows.map((r) => ({ ...r, mutual: 0, distance: null }));
+  if (demoMode || !supabase) return plain(await fetchSimilarPlayers(demoMode, null));
+  const { data, error } = await supabase.rpc('find_players', {
+    p_min_skill: a.range.min,
+    p_max_skill: a.range.max,
+    p_lat: a.place?.lat ?? null,
+    p_lng: a.place?.lng ?? null,
+    p_radius_miles: a.miles,
+    p_common_only: a.common,
+    p_scope: a.scope,
+  });
+  if (error) return plain(await fetchSimilarPlayers(demoMode, null));
+  return ((data ?? []) as DbFound[]).map((p) => ({
     id: p.profile_id,
     name: p.display_name,
     username: p.username,
     skill: p.skill_level,
-    relation: null,
+    relation: p.is_friend ? 'friend' : null,
     lookingNow: p.looking_now,
     plays_singles: p.plays_singles,
     plays_doubles: p.plays_doubles,
+    mutual: Number(p.mutual_friends ?? 0),
+    distance: p.distance_miles === null ? null : Number(p.distance_miles),
   }));
 }
-
-// Same skill groups everywhere: Beginner 2.0 to 2.5, Intermediate 3.0 to 3.5, Pro 4.0 to 4.5, Star 5.0 and up.
-export const skillRanges: { label: string; min: number | null; max: number | null }[] = [
-  { label: 'Any skill', min: null, max: null },
-  { label: 'Beginner', min: null, max: 2.99 },
-  { label: 'Intermediate', min: 3.0, max: 3.99 },
-  { label: 'Pro', min: 4.0, max: 4.99 },
-  { label: 'Star', min: 5.0, max: null },
-];

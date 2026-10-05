@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
 import { CourtMap } from '@/components/CourtMap';
-import { HelpFooter } from '@/components/HelpFooter';
+import { ShowMore, usePaged } from '@/components/ShowMore';
 import { Body, Button, Card, Display, Heading, Screen, SearchField } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import {
@@ -22,6 +22,7 @@ import {
   nearbyMiles,
   searchCourts,
   useCourts,
+  widerMiles,
 } from '@/lib/courts';
 import { formatMiles } from '@/lib/format';
 import { getLocationIfAllowed, LatLng, rexburg } from '@/lib/location';
@@ -34,8 +35,8 @@ import { useClearOnBlur } from '@/lib/use-clear-on-blur';
 
 type Standing = { teams: number; champs: { name: string; record: string } | null; leader: { name: string; wins: number } | null; myRank: number | null };
 
-// Courts shown before "Show all".
-const listSize = 10;
+// Courts shown before "Show more".
+const listSize = 3;
 
 export default function CourtsScreen() {
   const { colors } = useTheme();
@@ -49,7 +50,7 @@ export default function CourtsScreen() {
   const [suggestions, setSuggestions] = useState<GoogleCourt[]>([]);
   const [latest, setLatest] = useState<Record<string, { condition: Condition; created_at: string }>>({});
   const [query, setQuery] = useState('');
-  const [showAll, setShowAll] = useState(false);
+  const [wide, setWide] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
 
   useEffect(() => {
@@ -77,11 +78,14 @@ export default function CourtsScreen() {
   useClearOnBlur(() => setQuery(''));
 
   const searching = query.trim().length > 0;
-  const nearby = useMemo(() => nearbyCourts(here, courts ?? []), [here, courts]);
+  // Courts within 10 miles. "Show all courts nearby" reaches 25 miles.
+  const near = useMemo(() => nearbyCourts(here, courts ?? [], nearbyMiles), [here, courts]);
+  const farther = useMemo(() => nearbyCourts(here, courts ?? [], widerMiles), [here, courts]);
   const results = useMemo(() => searchCourts(here, courts ?? [], query), [here, courts, query]);
-  const everything = useMemo(() => nearbyCourts(null, courts ?? []), [courts]);
-  const pool: CourtWithMiles[] = searching ? results : showAll ? everything : nearby;
-  const shown = searching || showAll ? pool : pool.slice(0, listSize);
+  const inRange: CourtWithMiles[] = wide ? farther : near;
+  const pool: CourtWithMiles[] = searching ? results : inRange;
+  const paged = usePaged(pool, listSize, listSize);
+  const shown = paged.shown;
   const shownKey = shown.map((c) => c.id).join(',');
 
   // Standings only for the courts on screen.
@@ -146,8 +150,6 @@ export default function CourtsScreen() {
       },
     ]);
 
-  const hiddenCount = everything.length - nearby.length;
-
   return (
     <Screen>
       <View style={{ height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -172,7 +174,7 @@ export default function CourtsScreen() {
               <Body weight="semibold" style={{ flex: 1 }}>
                 {pendingCount > 0
                   ? `${pendingCount} ${pendingCount === 1 ? 'court is' : 'courts are'} waiting for review`
-                  : 'Admin: review courts or add ones found on the map'}
+                  : 'Admin: review courts'}
               </Body>
               <Body weight="bold" tone="accent" style={{ flexShrink: 0 }}>
                 Review
@@ -189,7 +191,7 @@ export default function CourtsScreen() {
             height={240}
             center={here}
             showsUserLocation={Boolean(here)}
-            courts={(courts ?? []).map((c) => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, subtitle: courtMeta(c) }))}
+            courts={(here ? inRange : (courts ?? [])).map((c) => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, subtitle: courtMeta(c) }))}
             onCourtPress={(id) => router.push(`/court/${id}`)}
             suggestions={suggestions.map((g) => ({ id: g.place_id, name: g.name, lat: g.lat, lng: g.lng }))}
             onSuggestionPress={(placeId) => {
@@ -209,7 +211,7 @@ export default function CourtsScreen() {
             ON THE MAP, NOT ON SICKLE YET
           </Heading>
           <Body size={13} tone="muted">
-            These are mapped pickleball courts (the gray pins). Tap Add and one becomes a Sickle court right away.
+            Gray pins are mapped pickleball courts. Tap Add to make one a Sickle court.
           </Body>
           {suggestions.map((g) => (
             <Card key={g.place_id} style={{ padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -230,17 +232,17 @@ export default function CourtsScreen() {
       {courts && courts.length === 0 ? (
         <Card style={{ padding: 16, gap: 6 }}>
           <Body weight="semibold">No courts yet</Body>
-          <Body tone="muted">Add the one you play at. It takes a minute.</Body>
+          <Body tone="muted">Add the one you play at.</Body>
         </Card>
       ) : null}
 
       <View style={{ gap: 10 }}>
         <Heading size={14} style={{ letterSpacing: 1 }}>
-          {searching ? `COURTS MATCHING “${query.trim().toUpperCase()}”` : showAll ? 'ALL COURTS' : here ? `COURTS WITHIN ${nearbyMiles} MILES` : 'COURTS'}
+          {searching ? `COURTS MATCHING “${query.trim().toUpperCase()}”` : here ? `COURTS WITHIN ${wide ? widerMiles : nearbyMiles} MILES` : 'COURTS'}
         </Heading>
-        {searching && results.length === 0 ? <Body tone="muted">No court matches that. Try part of the name, or add it with Add a court.</Body> : null}
-        {!searching && courts && courts.length > 0 && nearby.length === 0 && !showAll ? (
-          <Body tone="muted">No Sickle courts within {nearbyMiles} miles of you yet. Add one from the map above, or show every court.</Body>
+        {searching && results.length === 0 ? <Body tone="muted">No court matches. Try part of the name, or tap Add a court.</Body> : null}
+        {!searching && courts && courts.length > 0 && here && inRange.length === 0 ? (
+          <Body tone="muted">No courts within {wide ? widerMiles : nearbyMiles} miles. Add one from the map.</Body>
         ) : null}
 
         {shown.map((court) => {
@@ -287,10 +289,10 @@ export default function CourtsScreen() {
                   ) : standing ? (
                     <Body size={13} tone="muted">
                       {court.is_private
-                        ? 'Private courts have no crown. Play here to track games with friends.'
+                        ? 'Private courts have no crown.'
                         : standing.leader
-                          ? `${standing.leader.name} leads. Win ${championWins} here and finish #1 to take the crown.`
-                          : `No champs yet. Win ${championWins} ranked matches here and finish #1 to take the crown.`}
+                          ? `${standing.leader.name} leads. Win ${championWins} and finish #1 to take the crown.`
+                          : `No champs yet. Win ${championWins} ranked matches and finish #1 to take the crown.`}
                     </Body>
                   ) : null}
                 </Card>
@@ -299,29 +301,25 @@ export default function CourtsScreen() {
           );
         })}
 
-        {!searching && !showAll && (pool.length > listSize || hiddenCount > 0) ? (
-          <Button
-            label={hiddenCount > 0 ? `Show all ${everything.length} courts` : `Show ${pool.length - listSize} more`}
-            variant="outline"
-            onPress={() => setShowAll(true)}
-          />
+        <ShowMore hasMore={paged.hasMore} remaining={paged.remaining} onPress={paged.more} />
+        {!searching && here && !wide && farther.length > near.length ? (
+          <Button label="Show all courts nearby" variant="outline" onPress={() => setWide(true)} />
         ) : null}
-        {!searching && showAll ? <Button label="Back to nearby courts" variant="ghost" onPress={() => setShowAll(false)} /> : null}
+        {!searching && here && wide ? <Button label={`Back to ${nearbyMiles} miles`} variant="ghost" onPress={() => setWide(false)} /> : null}
       </View>
 
       <Card style={{ padding: 16, gap: 8 }}>
         <Heading size={14} style={{ letterSpacing: 1 }}>
           DON&apos;T SEE YOUR COURT?
         </Heading>
-        <Body size={14}>1. Look for a gray pin on the map. Tap it, then Add, and it becomes a Sickle court right away.</Body>
-        <Body size={14}>2. No gray pin? Tap Add a court, drop a pin on the courts and send it. An admin checks it and it goes live.</Body>
-        <Body size={14}>3. Just for you and your friends, like a backyard court? Add a court and pick Private. It never goes to an admin and only friends see it.</Body>
+        <Body size={14}>1. Tap a gray pin on the map, then Add. It goes live right away.</Body>
+        <Body size={14}>2. No gray pin? Tap Add a court and drop a pin. An admin checks it first.</Body>
+        <Body size={14}>3. Backyard court? Add a court and pick Private. Only you and your friends see it.</Body>
         <Link href="/court/new" asChild>
           <Button label="Add a court" variant="outline" size="sm" style={{ alignSelf: 'flex-start' }} />
         </Link>
       </Card>
 
-      <HelpFooter />
     </Screen>
   );
 }

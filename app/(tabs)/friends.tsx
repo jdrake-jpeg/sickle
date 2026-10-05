@@ -2,25 +2,26 @@ import { Link, useFocusEffect } from 'expo-router';
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
-import { HelpFooter } from '@/components/HelpFooter';
+import { FilterChips, FilterGroup, Filters } from '@/components/Filters';
 import { ShowMore, usePaged } from '@/components/ShowMore';
-import { skillLabel } from '@/components/SkillPicker';
-import { Avatar, Body, Button, Card, Chip, Display, ListRow, Screen, SearchField, SectionHeader } from '@/components/ui';
+import { ratingText, RatingGuide } from '@/components/SkillPicker';
+import { Avatar, Body, Button, Card, Display, ListRow, Screen, SearchField, SectionHeader } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import {
   addFriend,
-  fetchBrowsePlayers,
+  fetchFindPlayers,
   fetchFriends,
   fetchRecentOpponents,
+  FindPlayer,
+  FindScope,
   FriendRow,
   OpponentRow,
+  ratingRanges,
   Relation,
   relationLabel,
-  SimilarPlayer,
-  skillRanges,
 } from '@/lib/friends';
-import { formatTags } from '@/lib/play';
+import { getLocationIfAllowed, LatLng } from '@/lib/location';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 import { useClearOnBlur } from '@/lib/use-clear-on-blur';
@@ -31,10 +32,9 @@ function lastSeenText(iso: string, played: boolean) {
   return `${played ? 'Played' : 'Challenged'} ${when}`;
 }
 
-type Format = 'any' | 'singles' | 'doubles';
+type Miles = 'any' | '5' | '10' | '25';
 
-// Find people: search, browse by skill and singles or doubles, and the players
-// you've met in games. Your friends list lives on your profile.
+// Find people: search, or browse with filters. Your friends list is on your profile.
 export default function FindPeopleScreen() {
   const { demoMode } = useAuth();
   const [friends, setFriends] = useState<FriendRow[]>([]);
@@ -42,9 +42,12 @@ export default function FindPeopleScreen() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FriendRow[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
-  const [skill, setSkill] = useState(skillRanges[0].label);
-  const [format, setFormat] = useState<Format>('any');
-  const [browse, setBrowse] = useState<SimilarPlayer[] | null>(null);
+  const [rating, setRating] = useState(ratingRanges[0].label);
+  const [miles, setMiles] = useState<Miles>('any');
+  const [common, setCommon] = useState<'any' | 'common'>('any');
+  const [scope, setScope] = useState<FindScope>('people');
+  const [place, setPlace] = useState<LatLng | null>(null);
+  const [browse, setBrowse] = useState<FindPlayer[] | null>(null);
 
   useClearOnBlur(() => setQuery(''));
 
@@ -57,19 +60,36 @@ export default function FindPeopleScreen() {
   useFocusEffect(
     useCallback(() => {
       loadPeople();
+      getLocationIfAllowed().then(setPlace);
     }, [loadPeople]),
   );
 
-  // The browse list follows the skill and format buttons.
+  // The list follows the filters.
   useEffect(() => {
-    const range = skillRanges.find((s) => s.label === skill)!;
+    const range = ratingRanges.find((r) => r.label === rating)!;
     let alive = true;
     setBrowse(null);
-    fetchBrowsePlayers(demoMode, range, format === 'any' ? null : format).then((rows) => alive && setBrowse(rows));
+    fetchFindPlayers(demoMode, {
+      range,
+      place,
+      miles: miles === 'any' ? null : Number(miles),
+      common: common === 'common',
+      scope,
+    }).then((rows) => alive && setBrowse(rows));
     return () => {
       alive = false;
     };
-  }, [demoMode, skill, format]);
+    // The place only matters when the phone's position changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoMode, rating, miles, common, scope, place?.lat, place?.lng]);
+
+  const filterCount = (rating !== ratingRanges[0].label ? 1 : 0) + (miles !== 'any' ? 1 : 0) + (common === 'common' ? 1 : 0) + (scope !== 'people' ? 1 : 0);
+  const clearFilters = () => {
+    setRating(ratingRanges[0].label);
+    setMiles('any');
+    setCommon('any');
+    setScope('people');
+  };
 
   const q = query.trim();
   const searching = q.length >= 2;
@@ -149,6 +169,17 @@ export default function FindPeopleScreen() {
   const metPaged = usePaged(met, 5);
   const searchPaged = usePaged(results, 8);
 
+  const found = (p: FindPlayer) =>
+    [
+      `@${p.username}`,
+      ratingText(p.skill),
+      p.distance !== null ? `${p.distance} mi away` : null,
+      p.mutual > 0 ? `${p.mutual} ${p.mutual === 1 ? 'friend' : 'friends'} in common` : null,
+      p.lookingNow ? 'Looking to play' : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
   return (
     <Screen>
       <View style={{ height: 44, justifyContent: 'center' }}>
@@ -180,34 +211,55 @@ export default function FindPeopleScreen() {
         </View>
       ) : (
         <>
-          <View style={{ gap: 8 }}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {skillRanges.map((s) => (
-                <Chip key={s.label} label={s.label} selected={s.label === skill} onPress={() => setSkill(s.label)} />
-              ))}
-            </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {(['any', 'singles', 'doubles'] as Format[]).map((f) => (
-                <Chip key={f} label={f === 'any' ? 'Singles or doubles' : f === 'singles' ? 'Singles' : 'Doubles'} selected={f === format} onPress={() => setFormat(f)} />
-              ))}
-            </View>
-          </View>
+          <Filters active={filterCount} onClear={clearFilters}>
+            <FilterGroup label="Rating">
+              <FilterChips options={ratingRanges.map((r) => ({ value: r.label, label: r.label }))} value={rating} onChange={setRating} />
+              <RatingGuide />
+            </FilterGroup>
+            <FilterGroup label="Nearby" hint={place ? undefined : 'Needs location. Turn it on in your phone settings.'}>
+              <FilterChips<Miles>
+                options={[
+                  { value: 'any', label: 'Anywhere' },
+                  { value: '5', label: '5 miles' },
+                  { value: '10', label: '10 miles' },
+                  { value: '25', label: '25 miles' },
+                ]}
+                value={miles}
+                onChange={setMiles}
+              />
+            </FilterGroup>
+            <FilterGroup label="Friends in common">
+              <FilterChips
+                options={[
+                  { value: 'any', label: 'Anyone' },
+                  { value: 'common', label: 'Has friends in common' },
+                ]}
+                value={common}
+                onChange={setCommon}
+              />
+            </FilterGroup>
+            <FilterGroup label="Show">
+              <FilterChips<FindScope>
+                options={[
+                  { value: 'people', label: 'New people' },
+                  { value: 'friends', label: 'My friends' },
+                  { value: 'all', label: 'Everyone' },
+                ]}
+                value={scope}
+                onChange={setScope}
+              />
+            </FilterGroup>
+          </Filters>
 
           <View style={{ gap: 8 }}>
             <SectionHeader title="Players" detail={browse ? `${browse.length}` : undefined} />
             {browse === null ? <Body tone="muted">Loading…</Body> : null}
             {browse && browse.length === 0 ? (
               <Card style={{ padding: 16 }}>
-                <Body tone="muted">Nobody matches that yet. Try another skill group, or check back as more players join.</Body>
+                <Body tone="muted">Nobody matches. Try changing the filters.</Body>
               </Card>
             ) : null}
-            {browsePaged.shown.map((p) =>
-              row(
-                p,
-                [`@${p.username}`, skillLabel(p.skill), p.lookingNow ? 'Looking to play now' : null, formatTags(p)].filter(Boolean).join(' · '),
-                addButton(p),
-              ),
-            )}
+            {browsePaged.shown.map((p) => row(p, found(p), addButton(p)))}
             <ShowMore hasMore={browsePaged.hasMore} remaining={browsePaged.remaining} onPress={browsePaged.more} />
           </View>
 
@@ -215,7 +267,7 @@ export default function FindPeopleScreen() {
             <SectionHeader title="Played with or against" />
             {met.length === 0 ? (
               <Card style={{ padding: 16 }}>
-                <Body tone="muted">Players you challenge or play show up here, so you can add them as friends after.</Body>
+                <Body tone="muted">Players you challenge or play show up here.</Body>
               </Card>
             ) : null}
             {metPaged.shown.map((p) => row(p, lastSeenText(p.lastSeen, p.played), addButton(p)))}
@@ -223,8 +275,6 @@ export default function FindPeopleScreen() {
           </View>
         </>
       )}
-
-      <HelpFooter />
     </Screen>
   );
 }

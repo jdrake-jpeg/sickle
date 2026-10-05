@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
 import { TeamPick } from '@/components/TeamPick';
+import { VsLine } from '@/components/VsLine';
 import { Body, Button, Card, Chip, Heading, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { courtsNear, nearbyMiles, useCourts } from '@/lib/courts';
@@ -22,6 +23,9 @@ const times = [
   { label: '8 PM', hour: 20 },
   { label: '9 PM', hour: 21 },
 ];
+
+// A start time that has already gone by today can't be picked.
+const isPast = (day: Date, hour: number) => new Date(day).setHours(hour, 0, 0, 0) < Date.now();
 
 function nextDays() {
   return Array.from({ length: 7 }, (_, i) => {
@@ -43,7 +47,8 @@ export default function NewChallengeScreen() {
   // Singles teams only play singles teams, doubles only doubles.
   const [singles, setSingles] = useState<boolean | null>(null);
   const [courtId, setCourtId] = useState<string | null>(court ?? null);
-  const [day, setDay] = useState(0);
+  // Today, unless every time slot today has already passed.
+  const [day, setDay] = useState(() => (times.some((t) => !isPast(new Date(), t.hour)) ? 0 : 1));
   const [hour, setHour] = useState<number | null>(null);
   const [bestOf, setBestOf] = useState<BestOf>(bestOfParam === '1' ? 1 : 3);
   const [busy, setBusy] = useState(false);
@@ -92,7 +97,7 @@ export default function NewChallengeScreen() {
     setBusy(true);
     try {
       await sendChallenge(demoMode, myTeam, team, courtId, when, bestOf);
-      Alert.alert('Challenge sent', `${teamName || 'They'} can accept or decline. You'll see it under Challenges.`);
+      Alert.alert('Challenge sent', `${teamName || 'They'} can accept or decline. Track it under Challenges.`);
       router.back();
     } catch (e) {
       Alert.alert("Couldn't send it", e instanceof Error ? e.message : 'Try again.');
@@ -105,11 +110,9 @@ export default function NewChallengeScreen() {
     return (
       <Screen>
         <Card style={{ padding: 16, gap: 10 }}>
-          <Heading>{singles ? "SINGLES ISN'T READY YET" : 'YOU NEED A PARTNER FIRST'}</Heading>
+          <Heading>{singles ? "SINGLES ISN'T READY" : 'YOU NEED A TEAM'}</Heading>
           <Body tone="muted">
-            {singles
-              ? 'Your singles team shows up once the latest Sickle update finishes loading. Close the app and open it again.'
-              : 'That team plays doubles, 2 vs 2. Make a team with a partner, then come back.'}
+            {singles ? 'Your singles team is still loading. Close and reopen the app.' : 'Doubles needs a team. Make one with a friend, then come back.'}
           </Body>
           {singles ? null : (
             <Link href="/team/new" asChild>
@@ -124,26 +127,10 @@ export default function NewChallengeScreen() {
   return (
     <Screen>
       <Heading size={22}>CHALLENGE {(teamName || 'this team').toUpperCase()}</Heading>
-      <Body tone="muted">
-        {singles ? 'Singles, 1 vs 1. ' : ''}Ranked. It counts once {singles ? 'you both' : 'both teams'} agree on the score.
-      </Body>
+      <Body tone="muted">Ranked. Counts once both sides confirm the score.</Body>
 
-      <Card style={{ padding: 14, gap: 10 }}>
-        <Body size={12} weight="bold" tone="muted">
-          WHO PLAYS WHO
-        </Body>
-        <View style={{ gap: 2 }}>
-          <Body size={12} tone="accent" weight="bold">
-            {singles ? 'YOU' : 'YOUR TEAM'}
-          </Body>
-          <Body weight="semibold">{singles ? 'You' : myChosen ? `${myChosen.team_name}${players[myChosen.team_id] ? ` · ${players[myChosen.team_id]}` : ''}` : 'Pick your team below'}</Body>
-        </View>
-        <View style={{ gap: 2 }}>
-          <Body size={12} tone="danger" weight="bold">
-            {singles ? 'THEM' : 'THEIR TEAM'}
-          </Body>
-          <Body weight="semibold">{`${teamName || 'This team'}${players[team] && !singles ? ` · ${players[team]}` : ''}`}</Body>
-        </View>
+      <Card style={{ padding: 14 }}>
+        <VsLine you={singles ? 'You' : (myChosen?.team_name ?? 'Your team')} them={teamName || 'This team'} size={22} />
       </Card>
 
       <View style={{ gap: 8 }}>
@@ -154,13 +141,13 @@ export default function NewChallengeScreen() {
           ))}
         </View>
         <Body size={13} tone="muted">
-          {bestOf === 1 ? 'One game to 11, win by 2. Quick, and the winner is whoever takes that game.' : 'First team to win 2 games, each to 11 and win by 2.'}
+          {bestOf === 1 ? 'One game to 11, win by 2.' : 'First to win 2 games. Each game to 11, win by 2.'}
         </Body>
       </View>
 
       {singles ? null : (
         <View style={{ gap: 8 }}>
-          <Body weight="semibold">Which of your teams is playing?</Body>
+          <Body weight="semibold">Your team</Body>
           {(playable ?? []).map((t) => (
             <TeamPick
               key={t.team_id}
@@ -199,7 +186,16 @@ export default function NewChallengeScreen() {
         <Body weight="semibold">Day</Body>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {days.map((d, i) => (
-            <Chip key={d.label} label={d.label} selected={day === i} onPress={() => setDay(i)} />
+            <Chip
+              key={d.label}
+              label={d.label}
+              selected={day === i}
+              disabled={i === 0 && times.every((t) => isPast(d.date, t.hour))}
+              onPress={() => {
+                setDay(i);
+                if (hour !== null && isPast(d.date, hour)) setHour(null);
+              }}
+            />
           ))}
         </View>
       </View>
@@ -208,12 +204,12 @@ export default function NewChallengeScreen() {
         <Body weight="semibold">Time</Body>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {times.map((t) => (
-            <Chip key={t.hour} label={t.label} selected={hour === t.hour} onPress={() => setHour(t.hour)} />
+            <Chip key={t.hour} label={t.label} selected={hour === t.hour} disabled={isPast(days[day].date, t.hour)} onPress={() => setHour(t.hour)} />
           ))}
         </View>
-        {inPast ? (
-          <Body size={13} tone="danger">
-            That time already passed. Pick a later one.
+        {day === 0 && times.every((t) => isPast(days[0].date, t.hour)) ? (
+          <Body size={13} tone="muted">
+            No times left today.
           </Body>
         ) : null}
       </View>

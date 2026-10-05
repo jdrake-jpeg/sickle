@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 
-import { Body, Card, Chip, Heading } from '@/components/ui';
+import { Body, Card, Chip, Heading, InfoDrop } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
 
 // Rough guide to pickleball ratings, on the same scale DUPR uses (2.0 to 8.0).
@@ -19,6 +19,12 @@ export const skillLevels: { value: number; tier: string; description: string }[]
 
 export function tierOf(skill: number) {
   return skill >= 5 ? 'Star' : skill >= 4 ? 'Pro' : skill >= 3 ? 'Intermediate' : 'Beginner';
+}
+
+// "Rating 3.5", the DUPR style number on its own.
+export function ratingText(skill: number | string | null | undefined) {
+  if (skill === null || skill === undefined || skill === '') return null;
+  return `Rating ${Number(skill).toFixed(1)}`;
 }
 
 // "3.5 Intermediate", so the number never shows up without its meaning.
@@ -120,5 +126,31 @@ export function SkillGuide({ title = 'WHAT DO THE LEVELS MEAN?', intro }: { titl
         ) : null}
       </Card>
     </Pressable>
+  );
+}
+
+// What each rating means, in a dropdown. Same numbers as DUPR.
+export function RatingGuide() {
+  const { colors } = useTheme();
+  return (
+    <InfoDrop title="What do the ratings mean?">
+      <View style={{ gap: 8 }}>
+        {skillLevels.map((s) => (
+          <View key={s.value} style={{ gap: 2, borderTopWidth: 1, borderColor: colors.border, paddingTop: 8 }}>
+            <Body size={14} weight="bold">
+              {s.value === 5.5 ? '5.5+' : s.value.toFixed(1)} · {s.tier}
+            </Body>
+            <Body size={13} tone="muted">
+              {s.description}
+            </Body>
+          </View>
+        ))}
+        <Pressable accessibilityRole="link" onPress={() => Linking.openURL('https://www.dupr.com')}>
+          <Body size={13} weight="bold" tone="accent">
+            Get your DUPR rating at dupr.com
+          </Body>
+        </Pressable>
+      </View>
+    </InfoDrop>
   );
 }

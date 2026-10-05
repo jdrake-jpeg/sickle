@@ -33,7 +33,7 @@ export const categories: { key: Category; column: string; title: string; detail:
   { key: 'teams', column: 'notify_teams', title: 'Teams', detail: 'A friend puts you on their team, or a team is made with you' },
   { key: 'friends', column: 'notify_friends', title: 'Friend requests', detail: 'Someone sends you a friend request or accepts yours' },
   { key: 'courts', column: 'notify_courts', title: 'Court conditions', detail: 'A local court you play at gets a new condition report (wet, crowded, nets down)' },
-  { key: 'messages', column: 'notify_messages', title: 'Messages', detail: 'A friend sends you a chat message' },
+  { key: 'messages', column: 'notify_messages', title: 'Messages', detail: 'A friend or a game chat sends you a message' },
 ];
 
 // How a notification shows while the app is open.
@@ -99,6 +99,7 @@ function openFromData(data: unknown) {
   if (path === '/challenges') router.navigate('/challenges');
   else if (path === '/profile') router.navigate('/profile');
   else if (path === '/friends') router.push('/my-friends');
+  else if (path === '/chats') router.push('/chats');
   else if (path.startsWith('/court/')) router.push({ pathname: '/court/[id]', params: { id: path.slice('/court/'.length) } });
   else router.push('/notifications');
 }

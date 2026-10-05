@@ -1,10 +1,6 @@
-import { router } from 'expo-router';
-import { ReactNode, useRef, useState } from 'react';
+import { ReactNode, useState } from 'react';
 import {
-  Animated,
   KeyboardAvoidingView,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -63,109 +59,26 @@ export function Body({
   return <Text {...props} style={[{ fontFamily, fontSize: size, color }, style]} />;
 }
 
-// The help bar stays out of the way until someone scrolls to the bottom of a
-// page, then slides up from the bottom edge.
-const helpRoom = 120;
-const helpTravel = 190;
-
-// Follows your finger: the bar rises as you scroll into the last stretch of the
-// page and drops back as you scroll up, at the same speed. It runs on the
-// native thread, so nothing re-renders while you scroll.
-function HelpSlideUp({ scrollY, maxY, closedV, onClose }: { scrollY: Animated.Value; maxY: Animated.Value; closedV: Animated.Value; onClose: () => void }) {
-  const { colors } = useTheme();
-  const left = Animated.subtract(maxY, scrollY);
-  const rise = left.interpolate({ inputRange: [0, 90], outputRange: [0, helpTravel], extrapolate: 'clamp' });
-  const away = closedV.interpolate({ inputRange: [0, 1], outputRange: [0, helpTravel] });
-  return (
-    <Animated.View
-      style={{
-        position: 'absolute',
-        left: 16,
-        right: 16,
-        bottom: 12,
-        transform: [{ translateY: Animated.add(rise, away) }],
-        shadowColor: '#000',
-        shadowOpacity: 0.25,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 8,
-      }}>
-      <Card style={{ padding: 14, gap: 8, alignItems: 'center' }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-          hitSlop={8}
-          onPress={onClose}
-          style={{ position: 'absolute', top: 2, right: 2, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textMuted }}>✕</Text>
-        </Pressable>
-        <Body size={13} tone="muted" style={{ textAlign: 'center', paddingHorizontal: 28 }}>
-          Trouble finding something or have questions?
-        </Body>
-        <Button label="How Sickle works" variant="outline" size="sm" onPress={() => router.push('/help')} />
-      </Card>
-    </Animated.View>
-  );
-}
-
-export function Screen({ children, scroll = true, help = true }: { children: ReactNode; scroll?: boolean; help?: boolean }) {
+export function Screen({ children, scroll = true }: { children: ReactNode; scroll?: boolean }) {
   const { colors } = useTheme();
   const content = <View style={styles.screenContent}>{children}</View>;
-
-  const scrollY = useRef(new Animated.Value(0)).current;
-  // How far the page can scroll. Huge when it doesn't scroll, so the bar stays hidden.
-  const maxY = useRef(new Animated.Value(1e6)).current;
-  const closedV = useRef(new Animated.Value(0)).current;
-  const closed = useRef(false);
-  const size = useRef({ layout: 0, content: 0 });
-
-  const measure = (next: Partial<{ layout: number; content: number }>) => {
-    size.current = { ...size.current, ...next };
-    const { layout, content: total } = size.current;
-    maxY.setValue(total > layout + 40 ? total - layout : 1e6);
-  };
-
-  const close = () => {
-    closed.current = true;
-    Animated.timing(closedV, { toValue: 1, duration: 180, useNativeDriver: true }).start();
-  };
-
-  // Scroll away from the bottom and the bar can come back next time.
-  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-    useNativeDriver: true,
-    listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (!closed.current) return;
-      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-      if (contentSize.height - layoutMeasurement.height - contentOffset.y > 120) {
-        closed.current = false;
-        closedV.setValue(0);
-      }
-    },
-  });
-
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
       {scroll ? (
         // Keeps the box you're typing in above the keyboard. iPhone scrolls it
         // into view; Android shrinks the screen above the keyboard.
         <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" enabled={Platform.OS === 'android'}>
-          <Animated.ScrollView
-            // Room at the bottom, so the bar never covers the last card.
-            contentContainerStyle={{ paddingBottom: space.xxl + (help ? helpRoom : 0) }}
+          <ScrollView
+            contentContainerStyle={{ paddingBottom: space.xxl }}
             automaticallyAdjustKeyboardInsets
             keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive"
-            scrollEventThrottle={16}
-            onScroll={help ? onScroll : undefined}
-            onLayout={help ? (e) => measure({ layout: e.nativeEvent.layout.height }) : undefined}
-            onContentSizeChange={help ? (_w, h) => measure({ content: h }) : undefined}>
+            keyboardDismissMode="interactive">
             {content}
-          </Animated.ScrollView>
+          </ScrollView>
         </KeyboardAvoidingView>
       ) : (
         content
       )}
-      {scroll && help ? <HelpSlideUp scrollY={scrollY} maxY={maxY} closedV={closedV} onClose={close} /> : null}
     </SafeAreaView>
   );
 }

@@ -4,6 +4,7 @@ import { Alert, Switch, View } from 'react-native';
 
 import { NotificationSettings } from '@/components/NotificationSettings';
 import { PlayPrefs } from '@/components/PlayPrefs';
+import { PreferredTimesEditor } from '@/components/PreferredTimes';
 import { skillLevels, tierOf } from '@/components/SkillPicker';
 import { Body, Button, Card, Chip, Heading, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
@@ -136,6 +137,7 @@ export default function SettingsScreen() {
       <View style={{ gap: 8 }}>
         <Heading>PLAYING</Heading>
         <PlayPrefs />
+        <PreferredTimesEditor />
       </View>
 
       <View style={{ gap: 8 }}>

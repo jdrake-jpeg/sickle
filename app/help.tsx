@@ -95,7 +95,7 @@ const topics: Topic[] = [
 // Everything about how Sickle works, in one place, so the other screens can stay simple.
 export default function HelpScreen() {
   return (
-    <Screen help={false}>
+    <Screen>
       <View style={{ gap: 6, paddingTop: 8 }}>
         <Display size={30}>HOW SICKLE WORKS</Display>
         <Body tone="muted">Tap a topic to read more.</Body>

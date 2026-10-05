@@ -21,6 +21,7 @@ export type Court = {
   is_private?: boolean;
   // The player who added it (null for courts entered before accounts existed).
   submitted_by?: string | null;
+  google_place_id?: string | null;
 };
 
 export type PendingCourt = Court & {
@@ -114,7 +115,7 @@ export function openDirections(court: Pick<Court, 'lat' | 'lng' | 'name'>) {
 // A court Google knows about. Not on Sickle until someone adds it.
 export type GoogleCourt = { place_id: string; name: string; address: string | null; lat: number; lng: number };
 
-function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+export function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
   const rad = Math.PI / 180;
   const h =
     Math.sin(((b.lat - a.lat) * rad) / 2) ** 2 +
@@ -122,28 +123,40 @@ function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: nu
   return 3958.8 * 2 * Math.asin(Math.sqrt(h));
 }
 
-// Pickleball courts mapped near a spot, minus ones already on Sickle. Uses
-// Google (the find-courts function) when it's set up, and otherwise
-// OpenStreetMap, which is free and needs no key.
-export async function findGoogleCourts(near: { lat: number; lng: number }, listed: Court[]): Promise<GoogleCourt[]> {
-  let found: GoogleCourt[] = [];
-  if (supabase) {
-    const { data, error } = await supabase.functions.invoke('find-courts', { body: { lat: near.lat, lng: near.lng } });
-    if (!error && data?.courts) found = data.courts as GoogleCourt[];
-  }
-  found = found.filter(isPickleballCourt);
-  if (found.length === 0) found = await findOsmCourts(near);
+// Mapped pickleball courts within some miles of a spot, nearest first. Uses
+// Google (the find-courts function) when it's set up, plus OpenStreetMap, which
+// is free and needs no key. Pins within ~100 m are merged into one.
+export async function findMappedCourts(near: { lat: number; lng: number }, miles = widerMiles): Promise<GoogleCourt[]> {
+  const [google, osm] = await Promise.all([
+    (async () => {
+      if (!supabase) return [] as GoogleCourt[];
+      try {
+        const { data, error } = await supabase.functions.invoke('find-courts', { body: { lat: near.lat, lng: near.lng } });
+        return !error && data?.courts ? (data.courts as GoogleCourt[]).filter(isPickleballCourt) : [];
+      } catch {
+        return [] as GoogleCourt[];
+      }
+    })(),
+    findOsmCourts(near, miles),
+  ]);
   const spots: GoogleCourt[] = [];
-  for (const g of found) {
-    // Skip ones already on Sickle, and merge pins within ~100 m into one.
-    if (listed.some((c) => milesBetween(c, g) < 0.06)) continue;
+  for (const g of [...google, ...osm]) {
+    if (milesBetween(near, g) > miles) continue;
     if (spots.some((s) => milesBetween(s, g) < 0.06)) continue;
     spots.push(g);
   }
-  return spots.sort((a, b) => milesBetween(near, a) - milesBetween(near, b)).slice(0, maxSuggestions);
+  return spots.sort((a, b) => milesBetween(near, a) - milesBetween(near, b));
 }
 
-// Keeps the map clean: only the closest few unlisted courts get a gray pin.
+// Mapped courts that Sickle doesn't have yet.
+export const unlistedCourts = (spots: GoogleCourt[], listed: Court[]) =>
+  spots.filter((g) => !listed.some((c) => milesBetween(c, g) < 0.06 || c.google_place_id === g.place_id));
+
+// The closest few unlisted courts, for screens that only need a handful.
+export async function findGoogleCourts(near: { lat: number; lng: number }, listed: Court[]): Promise<GoogleCourt[]> {
+  return unlistedCourts(await findMappedCourts(near, nearbyMiles), listed).slice(0, maxSuggestions);
+}
+
 const maxSuggestions = 8;
 
 // Google's "pickleball courts" search also returns paddle shops, gyms and
@@ -156,39 +169,77 @@ function isPickleballCourt(g: GoogleCourt) {
 
 type OsmElement = { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> };
 
-// Pickleball courts on OpenStreetMap within about 10 miles. Each court there
-// is often its own shape, so ones within ~100 m are merged into one pin.
-export async function findOsmCourts(near: { lat: number; lng: number }): Promise<GoogleCourt[]> {
-  const query = `[out:json][timeout:15];(nwr["sport"~"pickleball"](around:16000,${near.lat},${near.lng}););out center tags 200;`;
-  try {
-    const res = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(query)}`,
-    });
-    if (!res.ok) return [];
-    const json = (await res.json()) as { elements?: OsmElement[] };
-    const spots: (GoogleCourt & { named: boolean; count: number })[] = [];
-    for (const el of json.elements ?? []) {
-      const lat = el.lat ?? el.center?.lat;
-      const lng = el.lon ?? el.center?.lon;
-      if (lat === undefined || lng === undefined) continue;
-      const name = el.tags?.name;
-      const near100m = spots.find((s) => milesBetween(s, { lat, lng }) < 0.06);
-      if (near100m) {
-        near100m.count++;
-        if (name && !near100m.named) Object.assign(near100m, { name, named: true });
-        continue;
-      }
-      spots.push({ place_id: `osm:${el.type}/${el.id}`, name: name ?? 'Pickleball courts', address: el.tags?.['addr:street'] ?? null, lat, lng, named: Boolean(name), count: 1 });
+// Free OpenStreetMap servers. If one is busy, the next one is tried.
+const overpassServers = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+
+async function overpass(query: string): Promise<OsmElement[] | null> {
+  for (const server of overpassServers) {
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 14000);
+    try {
+      const res = await fetch(server, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: abort.signal,
+      });
+      if (!res.ok) continue;
+      return ((await res.json()) as { elements?: OsmElement[] }).elements ?? [];
+    } catch {
+      // Try the next server.
+    } finally {
+      clearTimeout(timer);
     }
-    return spots
-      .sort((a, b) => milesBetween(near, a) - milesBetween(near, b))
-      .slice(0, maxSuggestions)
-      .map(({ place_id, name, address, lat, lng }) => ({ place_id, name, address, lat, lng }));
-  } catch {
-    return [];
   }
+  return null;
+}
+
+// Pickleball courts on OpenStreetMap: courts and parks tagged for pickleball,
+// and anything with pickleball in its name (clubs, parks). Each court there is
+// often its own shape, so ones within ~100 m are merged into one pin.
+export async function findOsmCourts(near: { lat: number; lng: number }, miles = widerMiles): Promise<GoogleCourt[]> {
+  const around = `(around:${Math.round(miles * 1609)},${near.lat},${near.lng})`;
+  const query = `[out:json][timeout:20];(nwr["sport"~"pickleball"]${around};nwr["name"~"pickle ?ball",i]${around};);out center tags 500;`;
+  const elements = await overpass(query);
+  if (!elements) return [];
+  const spots: (GoogleCourt & { named: boolean })[] = [];
+  for (const el of elements) {
+    const lat = el.lat ?? el.center?.lat;
+    const lng = el.lon ?? el.center?.lon;
+    if (lat === undefined || lng === undefined) continue;
+    const tags = el.tags ?? {};
+    if (tags.access === 'private' || tags.access === 'no') continue;
+    const name = tags.name;
+    // Shops and the like that happen to have pickleball in the name.
+    if (name && notACourt.test(name)) continue;
+    // Named but not a court at all (a road, a lake): needs a court tag or a pickleball name.
+    if (!/pickleball/.test(tags.sport ?? '') && !/pickle ?ball/i.test(name ?? '')) continue;
+    const merged = spots.find((s) => milesBetween(s, { lat, lng }) < 0.06);
+    if (merged) {
+      if (name && !merged.named) Object.assign(merged, { name, named: true });
+      continue;
+    }
+    const street = tags['addr:street'];
+    spots.push({
+      place_id: `osm:${el.type}/${el.id}`,
+      name: name ?? (street ? `Pickleball courts on ${street}` : 'Pickleball courts'),
+      address: street ?? null,
+      lat,
+      lng,
+      named: Boolean(name),
+    });
+  }
+  return spots.map(({ place_id, name, address, lat, lng }) => ({ place_id, name, address, lat, lng }));
+}
+
+// Adds mapped courts near you to Sickle in one go (the 5 mile ones). Returns
+// how many were new.
+export async function addNearbyMapCourts(demoMode: boolean, spots: GoogleCourt[]): Promise<number> {
+  if (demoMode || !supabase || spots.length === 0) return 0;
+  const { data, error } = await supabase.rpc('add_nearby_map_courts', {
+    p_spots: spots.slice(0, 25).map((g) => ({ name: g.name, lat: g.lat, lng: g.lng, address: g.address, place_id: g.place_id })),
+  });
+  return error ? 0 : Number(data ?? 0);
 }
 
 // Courts already on Sickle, nearest first, with how far away they are.
@@ -277,6 +328,8 @@ export async function adminRemoveCourt(demoMode: boolean, courtId: string): Prom
 // nearby" reaches.
 export const nearbyMiles = 10;
 export const widerMiles = 25;
+// Mapped courts this close are added to Sickle for you.
+export const autoAddMiles = 5;
 
 export type CourtWithMiles = Court & { miles: number | null };
 

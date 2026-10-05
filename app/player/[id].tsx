@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { addFriend, fetchRelation, Relation, relationLabel, removeFriend } from '@/lib/friends';
 import { fetchMyTeams, fetchPlayerHistory, fetchPlayerTeams, formatWhen, HistoryRow, TeamRow, useChallenges, useTeamPlayers } from '@/lib/matches';
+import { fetchPreferredTimes, hasPreferred, noPreferredTimes, preferredText, PreferredTimes } from '@/lib/preferred';
 import { Crown, crownText, fetchPlayerCrowns, fetchPlayerOpen, formatTags, PlayerOpen } from '@/lib/play';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
@@ -36,6 +37,7 @@ export default function PlayerScreen() {
   const [showTeams, setShowTeams] = useState(false);
   const [history, setHistory] = useState<HistoryRow[] | null>(null);
   const [open, setOpen] = useState<PlayerOpen | null>(null);
+  const [prefs, setPrefs] = useState<PreferredTimes>(noPreferredTimes);
   const [crowns, setCrowns] = useState<Crown[]>([]);
   const [stats, setStats] = useState<{ wins: number | null; losses: number | null; hidden: boolean } | null>(null);
 
@@ -73,6 +75,7 @@ export default function PlayerScreen() {
   useEffect(() => {
     fetchPlayerHistory(demoMode, id).then(setHistory);
     fetchPlayerOpen(demoMode, id).then(setOpen);
+    fetchPreferredTimes(demoMode, id).then(setPrefs);
     fetchPlayerCrowns(demoMode, id).then(setCrowns);
   }, [demoMode, id]);
 
@@ -195,6 +198,11 @@ export default function PlayerScreen() {
         {open ? (
           <Body size={13} tone="muted">
             {[formatTags(open) ? `Open to ${formatTags(open)}` : null, !open.can_friend && relation === null ? `Not taking friend requests` : null].filter(Boolean).join(' · ')}
+          </Body>
+        ) : null}
+        {hasPreferred(prefs) ? (
+          <Body size={13} tone="muted">
+            Likes {preferredText(prefs)}
           </Body>
         ) : null}
         {relation === 'friend' ? (

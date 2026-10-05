@@ -65,7 +65,10 @@ export function Body({
 
 // The help bar stays out of the way until someone scrolls to the bottom of a
 // page, then slides up from the bottom edge.
-function HelpSlideUp({ show }: { show: boolean }) {
+const helpRoom = 120;
+
+function HelpSlideUp({ show, onClose }: { show: boolean; onClose: () => void }) {
+  const { colors } = useTheme();
   const y = useRef(new Animated.Value(180)).current;
   useEffect(() => {
     Animated.timing(y, { toValue: show ? 0 : 180, duration: 240, useNativeDriver: true }).start();
@@ -86,7 +89,15 @@ function HelpSlideUp({ show }: { show: boolean }) {
         elevation: 8,
       }}>
       <Card style={{ padding: 14, gap: 8, alignItems: 'center' }}>
-        <Body size={13} tone="muted" style={{ textAlign: 'center' }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          hitSlop={8}
+          onPress={onClose}
+          style={{ position: 'absolute', top: 2, right: 2, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textMuted }}>✕</Text>
+        </Pressable>
+        <Body size={13} tone="muted" style={{ textAlign: 'center', paddingHorizontal: 28 }}>
           Trouble finding something or have questions?
         </Body>
         <Button label="How Sickle works" variant="outline" size="sm" onPress={() => router.push('/help')} />
@@ -97,16 +108,26 @@ function HelpSlideUp({ show }: { show: boolean }) {
 
 export function Screen({ children, scroll = true, help = true }: { children: ReactNode; scroll?: boolean; help?: boolean }) {
   const { colors } = useTheme();
-  const [showHelp, setShowHelp] = useState(false);
+  const [atBottom, setAtBottom] = useState(false);
+  const [closed, setClosed] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const showHelp = atBottom && !closed;
   const content = <View style={styles.screenContent}>{children}</View>;
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!help) return;
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-    const scrollable = contentSize.height > layoutMeasurement.height + 80;
-    const atBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 40;
-    setShowHelp(scrollable && atBottom);
+    const scrollable = contentSize.height > layoutMeasurement.height + 40;
+    const bottom = scrollable && contentOffset.y + layoutMeasurement.height >= contentSize.height - 40;
+    setAtBottom(bottom);
+    // Scroll away from the bottom and it can pop up again next time.
+    if (!bottom) setClosed(false);
   };
+
+  // The page rises with the popup, so it never covers anything.
+  useEffect(() => {
+    if (showHelp) setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 30);
+  }, [showHelp]);
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
@@ -115,7 +136,8 @@ export function Screen({ children, scroll = true, help = true }: { children: Rea
         // into view; Android shrinks the screen above the keyboard.
         <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" enabled={Platform.OS === 'android'}>
           <ScrollView
-            contentContainerStyle={{ paddingBottom: space.xxl }}
+            ref={scrollRef}
+            contentContainerStyle={{ paddingBottom: space.xxl + (showHelp ? helpRoom : 0) }}
             automaticallyAdjustKeyboardInsets
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
@@ -127,7 +149,7 @@ export function Screen({ children, scroll = true, help = true }: { children: Rea
       ) : (
         content
       )}
-      {scroll && help ? <HelpSlideUp show={showHelp} /> : null}
+      {scroll && help ? <HelpSlideUp show={showHelp} onClose={() => setClosed(true)} /> : null}
     </SafeAreaView>
   );
 }

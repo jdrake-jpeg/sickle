@@ -1,5 +1,5 @@
 -- Verifies challenge and friend request settings, finding players, and crowns:
---   * challenges_from: everyone, friends only, nobody
+--   * challenges_from: everyone, friends only
 --   * friend_requests off blocks new requests but not accepting one you already got
 --   * similar_players finds people within half a point, by format
 --   * a crown needs rank 1 and at least 6 wins at the court; singles and doubles are separate
@@ -42,15 +42,15 @@ set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ae02';
 insert into ids select 's2', team_id from public.my_teams_all();
 
 -- Challenge settings. Set Two is the one being challenged.
-update public.profiles set challenges_from = 'nobody' where id = '00000000-0000-0000-0000-00000000ae02';
-set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ae01';
+-- Nobody was removed: it is no longer a valid choice.
 do $$ begin
-  assert not (select can_challenge from public.player_open('00000000-0000-0000-0000-00000000ae02')), 'paused: cannot challenge';
-  assert (select challenge_note from public.player_open('00000000-0000-0000-0000-00000000ae02')) = 'Set isn''t taking challenges right now';
+  begin
+    update public.profiles set challenges_from = 'nobody' where id = '00000000-0000-0000-0000-00000000ae02';
+    raise exception 'nobody should be rejected';
+  exception when check_violation then null;
+  end;
 end $$;
-select pg_temp.expect_error(
-  $$select public.send_challenge(pg_temp.id('s1'), pg_temp.id('s2'), '00000000-0000-0000-0000-00000000aecc', now() + interval '1 day')$$,
-  'Set isn''t taking challenges');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ae01';
 
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ae02';
 update public.profiles set challenges_from = 'friends' where id = '00000000-0000-0000-0000-00000000ae02';

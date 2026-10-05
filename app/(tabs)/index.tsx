@@ -52,8 +52,7 @@ function showLocationError(error: unknown) {
   }
 }
 
-// Play: turn on Looking to Play, say what you want, and see who else is looking
-// for the same thing. Searching for people is on the Find people tab.
+// Play: turn on Looking to Play, say what you want, and see players available. Searching for people is on the Find people tab.
 export default function PlayScreen() {
   const { colors } = useTheme();
   const { demoMode, session } = useAuth();
@@ -67,6 +66,7 @@ export default function PlayScreen() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [rating, setRating] = useState(ratingRanges[0].label);
   const [radius, setRadius] = useState<Radius>('5');
+  const [game, setGame] = useState<'both' | 'singles' | 'doubles'>('both');
   const unread = useUnreadCount(!demoMode && Boolean(userId));
   const reloadUnread = unread.reload;
 
@@ -106,8 +106,8 @@ export default function PlayScreen() {
     }
   };
 
-  // Show people who want what you want: singles, doubles, or either.
-  const format = !settings ? null : settings.plays_singles && settings.plays_doubles ? null : settings.plays_singles ? 'singles' : 'doubles';
+  // The Game type filter: null means both.
+  const format = game === 'both' ? null : game;
 
   const loadNearby = useCallback(async () => {
     if (!supabase || !location) return;
@@ -173,7 +173,7 @@ export default function PlayScreen() {
   const emptyMessage =
     !demoMode && !location
       ? 'Tap Go to see who else is looking nearby.'
-      : 'Nobody nearby is looking right now.';
+      : 'No players available right now.';
 
   return (
     <Screen>
@@ -224,13 +224,25 @@ export default function PlayScreen() {
       </Card>
 
       <View style={{ gap: 10 }}>
-        <SectionHeader title="Looking for the same" detail={`${results.length} nearby`} />
+        <SectionHeader title="Players available" detail={`${results.length} nearby`} />
         <Filters
-          active={(rating !== ratingRanges[0].label ? 1 : 0) + (radius !== '5' ? 1 : 0)}
+          active={(rating !== ratingRanges[0].label ? 1 : 0) + (radius !== '5' ? 1 : 0) + (game !== 'both' ? 1 : 0)}
           onClear={() => {
             setRating(ratingRanges[0].label);
             setRadius('5');
+            setGame('both');
           }}>
+          <FilterGroup label="Game type">
+            <FilterChips
+              options={[
+                { value: 'both' as const, label: 'Both' },
+                { value: 'singles' as const, label: 'Singles' },
+                { value: 'doubles' as const, label: 'Doubles' },
+              ]}
+              value={game}
+              onChange={setGame}
+            />
+          </FilterGroup>
           <FilterGroup label="Rating">
             <FilterChips options={ratingRanges.map((r) => ({ value: r.label, label: r.label }))} value={rating} onChange={setRating} />
             <RatingGuide />

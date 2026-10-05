@@ -194,7 +194,7 @@ export default function PlayerScreen() {
         </Body>
         {open ? (
           <Body size={13} tone="muted">
-            {[formatTags(open), !open.can_friend && relation === null ? `Not taking friend requests` : null].filter(Boolean).join(' · ')}
+            {[formatTags(open) ? `Open to ${formatTags(open)}` : null, !open.can_friend && relation === null ? `Not taking friend requests` : null].filter(Boolean).join(' · ')}
           </Body>
         ) : null}
         {relation === 'friend' ? (

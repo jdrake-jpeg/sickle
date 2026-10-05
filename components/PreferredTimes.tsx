@@ -1,23 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
-import { Body, Button, Chip } from '@/components/ui';
+import { TimeField } from '@/components/TimeWheel';
+import { Body } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import {
-  defaultStart,
-  earliestStart,
-  fetchPreferredTimes,
-  latestStart,
-  noPreferredTimes,
-  PreferredTimes,
-  savePreferredTimes,
-  weekDays,
-  windowText,
-} from '@/lib/preferred';
+import { defaultStart, fetchPreferredTimes, latestStart, PreferredTimes, savePreferredTimes, weekDays, windowText } from '@/lib/preferred';
 import { useProfile } from '@/lib/profile';
 
-// Settings: the days you like to play and one 2 hour window, like 10 to 12 or
-// 7 to 9 PM. Players see it when they challenge you. Saves as you tap.
+// A Date whose clock is the given minutes after midnight (the day doesn't matter).
+const atMinutes = (minutes: number) => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setMinutes(minutes);
+  return d;
+};
+
+// Settings: pick a day, then spin the wheel to the 2 hour window you like that
+// day, like 10 to 12 or 7 to 9 PM. Each day can be different. Players see these
+// when they challenge you. Saves as you go.
 export function PreferredTimesEditor() {
   const { demoMode } = useAuth();
   const { profile } = useProfile();
@@ -28,7 +28,6 @@ export function PreferredTimesEditor() {
   }, [demoMode, profile?.id]);
 
   if (!prefs) return null;
-  const start = prefs.start ?? defaultStart;
 
   const change = async (next: PreferredTimes) => {
     const before = prefs;
@@ -41,40 +40,43 @@ export function PreferredTimesEditor() {
     }
   };
 
-  const toggleDay = (day: number) => {
-    const days = prefs.days.includes(day) ? prefs.days.filter((d) => d !== day) : [...prefs.days, day];
-    change({ days, start: days.length > 0 ? start : null });
-  };
-
-  const move = (by: number) => change({ days: prefs.days, start: Math.max(earliestStart, Math.min(latestStart, start + by)) });
-
   return (
     <View style={{ gap: 10 }}>
       <View style={{ gap: 2 }}>
         <Body weight="semibold">Preferred times</Body>
         <Body size={13} tone="muted">
-          Players see these when they challenge you.
+          Tap a day to pick your 2 hour window. Players see these when they challenge you.
         </Body>
       </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {weekDays.map((d) => (
-          <Chip key={d.value} label={d.label} selected={prefs.days.includes(d.value)} onPress={() => toggleDay(d.value)} />
-        ))}
-      </View>
-      {prefs.days.length > 0 ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Button label="Earlier" variant="outline" size="sm" disabled={start <= earliestStart} onPress={() => move(-30)} />
-          <Body weight="bold" size={16} style={{ flex: 1, textAlign: 'center' }}>
-            {windowText(start)}
-          </Body>
-          <Button label="Later" variant="outline" size="sm" disabled={start >= latestStart} onPress={() => move(30)} />
-        </View>
-      ) : (
+      {weekDays.map((d) => {
+        const start = prefs[d.value];
+        return (
+          <TimeField
+            key={d.value}
+            title={`${d.long}, start time`}
+            value={atMinutes(start ?? defaultStart)}
+            display={start === undefined ? `${d.long}: not set` : `${d.long}: ${windowText(start)}`}
+            action={start === undefined ? 'Set' : 'Change'}
+            mode="time"
+            allowPast
+            onChange={(t) => change({ ...prefs, [d.value]: Math.min(latestStart, t.getHours() * 60 + t.getMinutes()) })}
+            onClear={
+              start === undefined
+                ? undefined
+                : () => {
+                    const next = { ...prefs };
+                    delete next[d.value];
+                    change(next);
+                  }
+            }
+          />
+        );
+      })}
+      {Object.keys(prefs).length > 0 ? null : (
         <Body size={13} tone="muted">
-          Pick the days you like to play.
+          Nothing set. Anyone can challenge you for any time.
         </Body>
       )}
-      {prefs.days.length > 0 ? <Button label="Clear" variant="ghost" size="sm" onPress={() => change(noPreferredTimes)} /> : null}
     </View>
   );
 }

@@ -86,7 +86,8 @@ export default function CourtsScreen() {
   // Courts within 10 miles. "Show all courts nearby" reaches 25 miles.
   const near = useMemo(() => nearbyCourts(here, courts ?? [], nearbyMiles), [here, courts]);
   const farther = useMemo(() => nearbyCourts(here, courts ?? [], widerMiles), [here, courts]);
-  const results = useMemo(() => searchCourts(here, courts ?? [], query), [here, courts, query]);
+  // Search stays inside 25 miles too. Courts further away only show on the full map.
+  const results = useMemo(() => searchCourts(here, courts ?? [], query).filter((c) => c.miles !== null && c.miles <= widerMiles), [here, courts, query]);
   // Courts only show for where you are. Nothing shows until we know that.
   const inRange: CourtWithMiles[] = here ? (wide ? farther : near) : [];
   const pool: CourtWithMiles[] = searching ? results : inRange;

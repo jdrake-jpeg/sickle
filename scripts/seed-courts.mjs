@@ -11,7 +11,7 @@
 // To test without the network: node scripts/seed-courts.mjs --from sample.json
 // (a saved Overpass response with an "elements" list; used for both states).
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 const states = [
@@ -32,8 +32,9 @@ function miles(a, b) {
 }
 
 async function overpass(query) {
-  for (const server of servers) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+  // The free servers are often busy (504). Keep cycling through them, waiting a bit longer each round.
+  for (let round = 1; round <= 6; round++) {
+    for (const server of servers) {
       try {
         console.log(`  asking ${new URL(server).host}...`);
         const res = await fetch(server, {
@@ -42,14 +43,16 @@ async function overpass(query) {
           body: `data=${encodeURIComponent(query)}`,
         });
         if (res.ok) return (await res.json()).elements ?? [];
-        console.log(`  ${res.status}, trying again`);
+        console.log(`  ${res.status}, busy`);
       } catch (e) {
-        console.log(`  ${e.message}, trying again`);
+        console.log(`  ${e.message}`);
       }
-      await new Promise((r) => setTimeout(r, 4000));
     }
+    const wait = round * 10;
+    console.log(`  waiting ${wait} seconds, then trying again (round ${round + 1} of 6)`);
+    await new Promise((r) => setTimeout(r, wait * 1000));
   }
-  throw new Error('No map server answered. Try again in a few minutes.');
+  throw new Error('No map server answered. Run it again in a few minutes. States that finished are saved, so it picks up where it left off.');
 }
 
 function toSpots(elements) {
@@ -103,8 +106,19 @@ const all = [];
 for (const state of states) {
   console.log(`${state.name}...`);
   const query = `[out:json][timeout:180];area["ISO3166-2"="${state.code}"]->.a;(nwr["sport"~"pickleball"](area.a);nwr["name"~"pickle ?ball",i](area.a););out center tags;`;
-  const elements = sample ?? (await overpass(query));
-  const spots = toSpots(elements);
+  // A finished state is saved, so a rerun skips it.
+  const saved = `supabase/seed/.${state.code}.json`;
+  let spots;
+  if (!sample && existsSync(saved)) {
+    spots = JSON.parse(readFileSync(saved, 'utf8'));
+    console.log('  already done, using the saved copy');
+  } else {
+    spots = toSpots(sample ?? (await overpass(query)));
+    if (!sample) {
+      mkdirSync(dirname(saved), { recursive: true });
+      writeFileSync(saved, JSON.stringify(spots));
+    }
+  }
   console.log(`  ${spots.length} courts`);
   all.push(...spots);
 }

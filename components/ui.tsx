@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { ReactNode, useRef, useState } from 'react';
 import {
   Animated,
   KeyboardAvoidingView,
@@ -66,22 +66,24 @@ export function Body({
 // The help bar stays out of the way until someone scrolls to the bottom of a
 // page, then slides up from the bottom edge.
 const helpRoom = 120;
+const helpTravel = 190;
 
-function HelpSlideUp({ show, onClose }: { show: boolean; onClose: () => void }) {
+// Follows your finger: the bar rises as you scroll into the last stretch of the
+// page and drops back as you scroll up, at the same speed. It runs on the
+// native thread, so nothing re-renders while you scroll.
+function HelpSlideUp({ scrollY, maxY, closedV, onClose }: { scrollY: Animated.Value; maxY: Animated.Value; closedV: Animated.Value; onClose: () => void }) {
   const { colors } = useTheme();
-  const y = useRef(new Animated.Value(180)).current;
-  useEffect(() => {
-    Animated.timing(y, { toValue: show ? 0 : 180, duration: 240, useNativeDriver: true }).start();
-  }, [show, y]);
+  const left = Animated.subtract(maxY, scrollY);
+  const rise = left.interpolate({ inputRange: [0, 90], outputRange: [0, helpTravel], extrapolate: 'clamp' });
+  const away = closedV.interpolate({ inputRange: [0, 1], outputRange: [0, helpTravel] });
   return (
     <Animated.View
-      pointerEvents={show ? 'auto' : 'none'}
       style={{
         position: 'absolute',
         left: 16,
         right: 16,
         bottom: 12,
-        transform: [{ translateY: y }],
+        transform: [{ translateY: Animated.add(rise, away) }],
         shadowColor: '#000',
         shadowOpacity: 0.25,
         shadowRadius: 12,
@@ -108,26 +110,38 @@ function HelpSlideUp({ show, onClose }: { show: boolean; onClose: () => void }) 
 
 export function Screen({ children, scroll = true, help = true }: { children: ReactNode; scroll?: boolean; help?: boolean }) {
   const { colors } = useTheme();
-  const [atBottom, setAtBottom] = useState(false);
-  const [closed, setClosed] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
-  const showHelp = atBottom && !closed;
   const content = <View style={styles.screenContent}>{children}</View>;
 
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!help) return;
-    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-    const scrollable = contentSize.height > layoutMeasurement.height + 40;
-    const bottom = scrollable && contentOffset.y + layoutMeasurement.height >= contentSize.height - 40;
-    setAtBottom(bottom);
-    // Scroll away from the bottom and it can pop up again next time.
-    if (!bottom) setClosed(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  // How far the page can scroll. Huge when it doesn't scroll, so the bar stays hidden.
+  const maxY = useRef(new Animated.Value(1e6)).current;
+  const closedV = useRef(new Animated.Value(0)).current;
+  const closed = useRef(false);
+  const size = useRef({ layout: 0, content: 0 });
+
+  const measure = (next: Partial<{ layout: number; content: number }>) => {
+    size.current = { ...size.current, ...next };
+    const { layout, content: total } = size.current;
+    maxY.setValue(total > layout + 40 ? total - layout : 1e6);
   };
 
-  // The page rises with the popup, so it never covers anything.
-  useEffect(() => {
-    if (showHelp) setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 30);
-  }, [showHelp]);
+  const close = () => {
+    closed.current = true;
+    Animated.timing(closedV, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+  };
+
+  // Scroll away from the bottom and the bar can come back next time.
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+    useNativeDriver: true,
+    listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!closed.current) return;
+      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+      if (contentSize.height - layoutMeasurement.height - contentOffset.y > 120) {
+        closed.current = false;
+        closedV.setValue(0);
+      }
+    },
+  });
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
@@ -135,21 +149,23 @@ export function Screen({ children, scroll = true, help = true }: { children: Rea
         // Keeps the box you're typing in above the keyboard. iPhone scrolls it
         // into view; Android shrinks the screen above the keyboard.
         <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" enabled={Platform.OS === 'android'}>
-          <ScrollView
-            ref={scrollRef}
-            contentContainerStyle={{ paddingBottom: space.xxl + (showHelp ? helpRoom : 0) }}
+          <Animated.ScrollView
+            // Room at the bottom, so the bar never covers the last card.
+            contentContainerStyle={{ paddingBottom: space.xxl + (help ? helpRoom : 0) }}
             automaticallyAdjustKeyboardInsets
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
-            scrollEventThrottle={64}
-            onScroll={onScroll}>
+            scrollEventThrottle={16}
+            onScroll={help ? onScroll : undefined}
+            onLayout={help ? (e) => measure({ layout: e.nativeEvent.layout.height }) : undefined}
+            onContentSizeChange={help ? (_w, h) => measure({ content: h }) : undefined}>
             {content}
-          </ScrollView>
+          </Animated.ScrollView>
         </KeyboardAvoidingView>
       ) : (
         content
       )}
-      {scroll && help ? <HelpSlideUp show={showHelp} onClose={() => setClosed(true)} /> : null}
+      {scroll && help ? <HelpSlideUp scrollY={scrollY} maxY={maxY} closedV={closedV} onClose={close} /> : null}
     </SafeAreaView>
   );
 }

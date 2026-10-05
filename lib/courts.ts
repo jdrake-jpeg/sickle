@@ -273,8 +273,10 @@ export async function adminRemoveCourt(demoMode: boolean, courtId: string): Prom
 // Finding courts in the app
 // ---------------------------------------------------------------------------
 
-// How far "nearby" reaches in the courts list.
-export const nearbyMiles = 25;
+// How far "nearby" reaches in the courts list, and how far "Show all courts
+// nearby" reaches.
+export const nearbyMiles = 10;
+export const widerMiles = 25;
 
 export type CourtWithMiles = Court & { miles: number | null };
 

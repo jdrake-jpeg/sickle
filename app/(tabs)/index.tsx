@@ -2,14 +2,15 @@ import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, View } from 'react-native';
 
-import { HelpFooter } from '@/components/HelpFooter';
+import { FilterChips, FilterGroup, Filters } from '@/components/Filters';
 import { LogoWordmark } from '@/components/Logo';
 import { LookingFor } from '@/components/PlayPrefs';
 import { ShowMore, usePaged } from '@/components/ShowMore';
-import { skillLabel } from '@/components/SkillPicker';
-import { Avatar, Body, Button, Card, Heading, ListRow, Screen, SectionHeader, Segmented } from '@/components/ui';
+import { RatingGuide, ratingText } from '@/components/SkillPicker';
+import { Avatar, Body, Button, Card, Heading, InfoDrop, ListRow, Screen, SectionHeader, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { formatMiles, initialsOf } from '@/lib/format';
+import { ratingRanges } from '@/lib/friends';
 import { getCurrentLocation, getLocationIfAllowed, LatLng, LocationError } from '@/lib/location';
 import { useUnreadCount } from '@/lib/notifications';
 import { defaultPlaySettings, fetchPlaySettings, formatTags, PlaySettings, savePlaySettings } from '@/lib/play';
@@ -26,8 +27,7 @@ const durations: { value: Duration; label: string; until: string }[] = [
   { value: 'tonight', label: 'Tonight', until: 'until 11:59 PM' },
 ];
 
-// Players who are looking right now, within this many miles.
-const nearbyRadius = 5;
+type Radius = '1' | '5' | '10' | '25';
 
 type Player = { id: string; name: string; username: string; skill: number | null; distance: string | null; plays_singles?: boolean; plays_doubles?: boolean };
 
@@ -65,6 +65,8 @@ export default function PlayScreen() {
   const [settings, setSettings] = useState<PlaySettings | null>(defaultPlaySettings);
   const [location, setLocation] = useState<LatLng | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [rating, setRating] = useState(ratingRanges[0].label);
+  const [radius, setRadius] = useState<Radius>('5');
   const unread = useUnreadCount(!demoMode && Boolean(userId));
   const reloadUnread = unread.reload;
 
@@ -109,7 +111,8 @@ export default function PlayScreen() {
 
   const loadNearby = useCallback(async () => {
     if (!supabase || !location) return;
-    const args = { p_lat: location.lat, p_lng: location.lng, p_radius_miles: nearbyRadius, p_min_skill: null, p_max_skill: null };
+    const range = ratingRanges.find((r) => r.label === rating)!;
+    const args = { p_lat: location.lat, p_lng: location.lng, p_radius_miles: Number(radius), p_min_skill: range.min, p_max_skill: range.max };
     let res = await supabase.rpc('nearby_players', format ? { ...args, p_format: format } : args);
     // The format filter needs the newer database update; fall back to no filter.
     if (res.error && format) res = await supabase.rpc('nearby_players', args);
@@ -126,7 +129,7 @@ export default function PlayScreen() {
         }),
       ),
     );
-  }, [location, format]);
+  }, [location, format, rating, radius]);
 
   useEffect(() => {
     if (!demoMode) loadNearby();
@@ -169,8 +172,8 @@ export default function PlayScreen() {
 
   const emptyMessage =
     !demoMode && !location
-      ? 'Tap Go to share your rough location and see who else is looking nearby.'
-      : 'Nobody nearby is looking for that right now. Check back soon, or find people on the Find people tab.';
+      ? 'Tap Go to see who else is looking nearby.'
+      : 'Nobody nearby is looking right now.';
 
   return (
     <Screen>
@@ -191,7 +194,7 @@ export default function PlayScreen() {
               <Heading size={18}>LOOKING TO PLAY</Heading>
             </View>
             <Body size={13} tone="muted">
-              {looking ? `On ${durations.find((d) => d.value === duration)!.until}` : 'Off. Tap Go to turn it on'}
+              {looking ? `On ${durations.find((d) => d.value === duration)!.until}.` : 'Off.'}
             </Body>
           </View>
           <Button
@@ -203,16 +206,48 @@ export default function PlayScreen() {
           />
         </View>
         <Body size={13} tone="muted">
-          {looking
-            ? 'You are on. Players nearby can see you and challenge you.'
-            : 'Turn this on when you want a game. Players nearby can see you and challenge you.'}
+          {looking ? 'Players nearby can see you and challenge you.' : 'Tap Go to let players nearby find you.'}
         </Body>
-        {settings ? <LookingFor settings={settings} onChange={changeSettings} /> : null}
-        {!looking ? <Segmented accent value={duration} onChange={setDuration} options={durations.map(({ value, label }) => ({ value, label }))} /> : null}
+        <InfoDrop title="Options">
+          <View style={{ gap: 12 }}>
+            {settings ? <LookingFor settings={settings} onChange={changeSettings} /> : null}
+            {!looking ? (
+              <View style={{ gap: 6 }}>
+                <Body size={13} weight="semibold" tone="muted">
+                  How long
+                </Body>
+                <Segmented accent value={duration} onChange={setDuration} options={durations.map(({ value, label }) => ({ value, label }))} />
+              </View>
+            ) : null}
+          </View>
+        </InfoDrop>
       </Card>
 
       <View style={{ gap: 10 }}>
         <SectionHeader title="Looking for the same" detail={`${results.length} nearby`} />
+        <Filters
+          active={(rating !== ratingRanges[0].label ? 1 : 0) + (radius !== '5' ? 1 : 0)}
+          onClear={() => {
+            setRating(ratingRanges[0].label);
+            setRadius('5');
+          }}>
+          <FilterGroup label="Rating">
+            <FilterChips options={ratingRanges.map((r) => ({ value: r.label, label: r.label }))} value={rating} onChange={setRating} />
+            <RatingGuide />
+          </FilterGroup>
+          <FilterGroup label="Distance">
+            <FilterChips<Radius>
+              options={[
+                { value: '1', label: '1 mile' },
+                { value: '5', label: '5 miles' },
+                { value: '10', label: '10 miles' },
+                { value: '25', label: '25 miles' },
+              ]}
+              value={radius}
+              onChange={setRadius}
+            />
+          </FilterGroup>
+        </Filters>
         {results.length === 0 ? (
           <Card style={{ padding: 16 }}>
             <Body tone="muted">{emptyMessage}</Body>
@@ -224,7 +259,7 @@ export default function PlayScreen() {
                 <ListRow
                   left={<Avatar initials={initialsOf(player.name)} />}
                   title={player.name}
-                  subtitle={[`@${player.username}`, skillLabel(player.skill), player.distance, formatTags(player)].filter(Boolean).join(' · ')}
+                  subtitle={[`@${player.username}`, ratingText(player.skill), player.distance, formatTags(player)].filter(Boolean).join(' · ')}
                   right={
                     <Body tone="accent" weight="bold" size={14}>
                       Challenge
@@ -239,10 +274,8 @@ export default function PlayScreen() {
       </View>
 
       <Link href="/friends" asChild>
-        <Button label="Find more people to play" variant="outline" />
+        <Button label="Find people" variant="outline" />
       </Link>
-
-      <HelpFooter />
     </Screen>
   );
 }

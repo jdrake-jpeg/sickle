@@ -11,8 +11,8 @@ import { BestOf } from '@/lib/scores';
 type Kind = 'singles' | 'doubles';
 
 // "Challenge Jake": pick singles or doubles, one game or best of 3, and for
-// doubles which of your teams plays which of theirs. Then it opens the screen
-// where you choose the court and time.
+// doubles which of your teams plays. Jake picks his team when he accepts. Then
+// it opens the screen where you choose the court and time.
 export function ChallengeBuilder({ playerId, firstName, blocked, blockedNote }: { playerId: string; firstName: string; blocked: boolean; blockedNote?: string | null }) {
   const { demoMode } = useAuth();
   const [kind, setKind] = useState<Kind>('singles');
@@ -20,7 +20,6 @@ export function ChallengeBuilder({ playerId, firstName, blocked, blockedNote }: 
   const [mine, setMine] = useState<TeamRow[] | null>(null);
   const [theirs, setTheirs] = useState<TeamRow[] | null>(null);
   const [myPick, setMyPick] = useState<string | null>(null);
-  const [theirPick, setTheirPick] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([fetchMyTeams(demoMode), fetchPlayerTeams(demoMode, playerId)]).then(([m, t]) => {
@@ -34,23 +33,23 @@ export function ChallengeBuilder({ playerId, firstName, blocked, blockedNote }: 
   const myDoubles = (mine ?? []).filter((t) => !t.is_singles);
   const theirDoubles = (theirs ?? []).filter((t) => !t.is_singles);
   const theirSingles = (theirs ?? []).find((t) => t.is_singles);
-  const players = useTeamPlayers(demoMode, [...myDoubles, ...theirDoubles]);
+  const players = useTeamPlayers(demoMode, myDoubles);
 
   useEffect(() => {
     if (myDoubles.length === 1) setMyPick(myDoubles[0].team_id);
-    if (theirDoubles.length === 1) setTheirPick(theirDoubles[0].team_id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mine, theirs]);
+  }, [mine]);
 
   const myTeam = myDoubles.find((t) => t.team_id === myPick);
-  const theirTeam = theirDoubles.find((t) => t.team_id === theirPick);
+  // The challenge goes to one of their teams. They can switch to another when they accept.
+  const theirTeam = theirDoubles[0];
 
   const go = () => {
     if (kind === 'singles') {
       if (!theirSingles) return;
       router.push({ pathname: '/challenge/new', params: { team: theirSingles.team_id, teamName: firstName, bestOf: String(bestOf) } });
     } else if (myTeam && theirTeam) {
-      router.push({ pathname: '/challenge/new', params: { team: theirTeam.team_id, teamName: theirTeam.team_name, myTeam: myTeam.team_id, bestOf: String(bestOf) } });
+      router.push({ pathname: '/challenge/new', params: { team: theirTeam.team_id, teamName: firstName, myTeam: myTeam.team_id, bestOf: String(bestOf) } });
     }
   };
 
@@ -90,36 +89,24 @@ export function ChallengeBuilder({ playerId, firstName, blocked, blockedNote }: 
             />
           </View>
 
-          {kind === 'singles' ? (
-            <Body size={13} tone="muted">
-              You against {firstName}, one on one. Next you pick the court and time.
-            </Body>
-          ) : mine === null || theirs === null ? null : myDoubles.length === 0 ? (
+          {kind === 'singles' ? null : mine === null || theirs === null ? null : myDoubles.length === 0 ? (
             <View style={{ gap: 8 }}>
-              <Body tone="muted">Doubles is team against team, and you don&apos;t have a team yet. Make one with a friend first.</Body>
+              <Body tone="muted">Doubles needs a team. Make one with a friend first.</Body>
               <Button label="Make a team" variant="outline" onPress={() => router.push('/team/new')} />
             </View>
           ) : theirDoubles.length === 0 ? (
-            <Body tone="muted">{firstName} isn&apos;t on a doubles team yet, so you can only challenge them to singles right now.</Body>
+            <Body tone="muted">{firstName} has no doubles team yet. Try singles.</Body>
           ) : (
             <View style={{ gap: 8 }}>
               <Body size={13} weight="semibold" tone="muted">
-                1. Your team (who you play with)
+                {myDoubles.length > 1 ? 'Pick your team' : 'Your team'}
               </Body>
               {myDoubles.map((t) => (
                 <TeamPick key={t.team_id} name={t.team_name} players={players[t.team_id]} selected={myPick === t.team_id} onPress={() => setMyPick(t.team_id)} />
               ))}
-              <Body size={13} weight="semibold" tone="muted">
-                2. {firstName}&apos;s team (who you play against)
+              <Body size={13} tone="muted">
+                {firstName} picks their team when they accept.
               </Body>
-              {theirDoubles.map((t) => (
-                <TeamPick key={t.team_id} name={t.team_name} players={players[t.team_id]} selected={theirPick === t.team_id} onPress={() => setTheirPick(t.team_id)} />
-              ))}
-              {myTeam && theirTeam ? (
-                <Body size={13} weight="semibold" tone="accent">
-                  {myTeam.team_name} vs {theirTeam.team_name}
-                </Body>
-              ) : null}
             </View>
           )}
 

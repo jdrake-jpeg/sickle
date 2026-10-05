@@ -5,11 +5,12 @@ import { Alert, Pressable, View } from 'react-native';
 import { ChallengeBuilder } from '@/components/ChallengeBuilder';
 import { HistoryList } from '@/components/HistoryList';
 import { tierOf } from '@/components/SkillPicker';
+import { VsLine } from '@/components/VsLine';
 import { Avatar, Body, Button, Card, Display, Field, Heading, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { addFriend, fetchRelation, Relation, relationLabel, removeFriend } from '@/lib/friends';
-import { fetchMyTeams, fetchPlayerHistory, fetchPlayerTeams, HistoryRow, TeamRow, useTeamPlayers } from '@/lib/matches';
+import { fetchMyTeams, fetchPlayerHistory, fetchPlayerTeams, formatWhen, HistoryRow, TeamRow, useChallenges, useTeamPlayers } from '@/lib/matches';
 import { Crown, crownText, fetchPlayerCrowns, fetchPlayerOpen, formatTags, PlayerOpen } from '@/lib/play';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
@@ -56,6 +57,18 @@ export default function PlayerScreen() {
   }, [demoMode, id, teamsVersion]);
 
   const teamPlayers = useTeamPlayers(demoMode, teams);
+
+  // Challenges you sent them, so you can see if they answered. Only you see this.
+  const challengeRows = useChallenges(demoMode);
+  const theirTeamIds = new Set(teams.map((t) => t.team_id));
+  const sentToThem = (challengeRows ?? [])
+    .filter(
+      (r) =>
+        r.i_challenged &&
+        theirTeamIds.has(r.their_team_id) &&
+        (r.status === 'pending' || (r.status === 'accepted' && !r.match_status) || (r.status === 'declined' && new Date(r.proposed_time).getTime() > Date.now())),
+    )
+    .slice(0, 3);
 
   useEffect(() => {
     fetchPlayerHistory(demoMode, id).then(setHistory);
@@ -105,7 +118,7 @@ export default function PlayerScreen() {
     const name = teamName.trim();
     const ok = await run(() => supabase!.rpc('create_team', { p_partner: player.id, p_name: name || null }));
     if (!ok) return;
-    Alert.alert('Team created', `${name || `You + ${firstName}`} is ready. Pick it when you challenge another team.`);
+    Alert.alert('Team created', `${name || `You + ${firstName}`} is ready.`);
     setTeamName('');
     setTeamsVersion((v) => v + 1);
   };
@@ -133,13 +146,14 @@ export default function PlayerScreen() {
     }
   };
 
+  const askUnfriend = () =>
+    Alert.alert(`Unfriend ${firstName}?`, "You won't be able to chat. You can add each other again later.", [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Unfriend', style: 'destructive', onPress: friendAction },
+    ]);
+
   const onFriendPress = () => {
-    if (relation === 'friend') {
-      Alert.alert(`Unfriend ${firstName}?`, undefined, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Unfriend', style: 'destructive', onPress: friendAction },
-      ]);
-    } else if (relation === 'outgoing') {
+    if (relation === 'outgoing') {
       Alert.alert('Cancel your friend request?', undefined, [
         { text: 'Keep it', style: 'cancel' },
         { text: 'Cancel request', style: 'destructive', onPress: friendAction },
@@ -183,13 +197,24 @@ export default function PlayerScreen() {
             {[formatTags(open), !open.can_friend && relation === null ? `Not taking friend requests` : null].filter(Boolean).join(' · ')}
           </Body>
         ) : null}
-        <Button
-          disabled={Boolean(open && !open.can_friend && relation === null)}
-          label={relation === 'friend' ? 'Friends ✓' : relation === 'incoming' ? 'Accept friend request' : relationLabel(relation)}
-          variant={relation === 'incoming' || relation === null ? 'primary' : 'outline'}
-          size="sm"
-          onPress={onFriendPress}
-        />
+        {relation === 'friend' ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Body weight="bold" tone="accent">
+              Friends ✓
+            </Body>
+            <Link href={{ pathname: '/chat/[id]', params: { id: player.id, name: player.name } }} asChild>
+              <Button label="Chat" size="sm" />
+            </Link>
+          </View>
+        ) : (
+          <Button
+            disabled={Boolean(open && !open.can_friend && relation === null)}
+            label={relation === 'incoming' ? 'Accept friend request' : relationLabel(relation)}
+            variant={relation === 'incoming' || relation === null ? 'primary' : 'outline'}
+            size="sm"
+            onPress={onFriendPress}
+          />
+        )}
       </View>
 
       {stats ? (
@@ -209,11 +234,33 @@ export default function PlayerScreen() {
         )
       ) : null}
 
-      {relation === 'friend' ? (
-        <Link href={{ pathname: '/friends/[id]', params: { id: player.id, name: player.name } }} asChild>
-          <Button label={`Games and ratings with ${firstName}`} variant="outline" />
-        </Link>
-      ) : null}
+      {sentToThem.map((r) => {
+        const theirs = teams.find((t) => t.team_id === r.their_team_id);
+        return (
+          <Pressable
+            key={r.challenge_id}
+            accessibilityRole="link"
+            onPress={() => router.navigate({ pathname: '/challenges', params: { tab: r.status === 'accepted' ? 'upcoming' : 'sent' } })}>
+            <Card highlighted style={{ padding: 14, gap: 6 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Body size={12} weight="bold" tone="muted" style={{ letterSpacing: 1 }}>
+                  CHALLENGE SENT
+                </Body>
+                <Body size={13} weight="bold" tone="accent">
+                  View
+                </Body>
+              </View>
+              <VsLine you={theirs?.is_singles ? 'You' : r.my_team_name} them={firstName} />
+              <Body size={13} tone="muted">
+                {r.court_name} · {formatWhen(r.proposed_time)}
+              </Body>
+              <Body size={13} weight="bold" tone={r.status === 'declined' ? 'danger' : 'accent'}>
+                {r.status === 'accepted' ? 'Accepted' : r.status === 'declined' ? 'Declined' : 'Waiting for an answer'}
+              </Body>
+            </Card>
+          </Pressable>
+        );
+      })}
 
       <ChallengeBuilder
         playerId={player.id}
@@ -257,7 +304,7 @@ export default function PlayerScreen() {
         </Card>
       ) : (
         <Body size={13} tone="muted">
-          Teams are only with friends. Add {firstName} as a friend first. Once they accept, you can make a doubles team here.
+          Add {firstName} as a friend to make a team.
         </Body>
       )}
 
@@ -268,13 +315,15 @@ export default function PlayerScreen() {
         </Card>
       ) : null}
 
+      {relation === 'friend' ? <Button label={`Unfriend ${firstName}`} variant="dangerOutline" onPress={askUnfriend} /> : null}
+
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Button
           label="Block"
           variant="outline"
           style={{ flex: 1 }}
           onPress={() =>
-            Alert.alert(`Block ${firstName}?`, "You won't see each other in Sickle, and neither of you can challenge the other.", [
+            Alert.alert(`Block ${firstName}?`, "You won't see each other, and neither can challenge the other.", [
               { text: 'Cancel', style: 'cancel' },
               { text: 'Block', style: 'destructive', onPress: block },
             ])

@@ -3,13 +3,13 @@ import { useState } from 'react';
 import { Button } from '@/components/ui';
 
 // Long lists stop after a few rows. "Show more" reveals the next batch.
-export function usePaged<T>(items: T[], size = 5) {
+export function usePaged<T>(items: T[], size = 5, step = size * 2) {
   const [count, setCount] = useState(size);
   return {
     shown: items.slice(0, count),
     hasMore: items.length > count,
     remaining: Math.max(0, items.length - count),
-    more: () => setCount((c) => c + size * 2),
+    more: () => setCount((c) => c + step),
   };
 }
 

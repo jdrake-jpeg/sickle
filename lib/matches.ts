@@ -153,9 +153,10 @@ async function call(fn: string, args: Record<string, unknown>) {
   return data;
 }
 
-export async function respondToChallenge(demoMode: boolean, id: string, accept: boolean) {
+// teamId: for a doubles challenge, which of your teams plays.
+export async function respondToChallenge(demoMode: boolean, id: string, accept: boolean, teamId?: string | null) {
   if (demoMode || !supabase) return demoUpdate(id, { status: accept ? 'accepted' : 'declined' });
-  await call('respond_to_challenge', { p_challenge: id, p_accept: accept });
+  await call('respond_to_challenge', { p_challenge: id, p_accept: accept, ...(accept && teamId ? { p_team: teamId } : {}) });
 }
 
 export async function cancelChallenge(demoMode: boolean, id: string) {

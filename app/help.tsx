@@ -10,75 +10,84 @@ const topics: Topic[] = [
   {
     title: 'Looking to Play',
     lines: [
-      'On the Play tab, tap Go to tell players nearby you want a game. While it is on, people can find you and challenge you. Tap Turn off when you are done, or it turns itself off when your time is up.',
-      'Pick what you are open to right there on the card: singles, doubles, or both. Players looking for the same thing show up on that page.',
-      'Other players only see a rough distance, never your exact spot.',
+      'On the Play tab, tap Go to let players nearby find you. It turns itself off when your time is up, or tap Turn off.',
+      'Open Options to pick singles, doubles or both, who can challenge you, and how long.',
+      'Others only see a rough distance, never your exact spot.',
     ],
   },
   {
     title: 'Finding people',
     lines: [
-      'The Find people tab is for finding players to challenge or add as friends. Search a name or username, or look at players near your level.',
-      'Use the skill and singles or doubles buttons there to narrow the list.',
-      'People you played against and have not added yet show up lower on the page.',
+      'On the Find people tab, search a name or username, or tap Filters.',
+      'Filter by rating, distance, friends in common, or show only your friends.',
+      'Ratings use the DUPR scale. Open What do the ratings mean? to learn more.',
     ],
   },
   {
     title: 'Challenges',
     lines: [
-      'Open a player and tap the Challenge card. Pick singles or doubles and one game or best of 3. For doubles pick your team and the team of theirs you want to play, then pick a court and time.',
-      'They can accept or decline. After you play, one side enters the score under Challenges and the other side confirms it. Only confirmed games count.',
+      'Open a player and use the Challenge card. Pick singles or doubles and one game or best of 3, then a court and time. Times that already passed are greyed out.',
+      'For doubles, pick your team. The other player picks their team when they accept.',
+      'After you play, one side enters the score and the other confirms it. Only confirmed games count.',
       'New is challenges sent to you. Sent is ones you sent. Upcoming is accepted games. Played is finished matches.',
     ],
   },
   {
-    title: 'Singles and doubles',
+    title: 'Chats',
     lines: [
-      'Singles is you against one other player. Everyone has a singles record built in, and you see it on your profile.',
-      'Doubles is team against team. A team is you and one friend.',
+      'Open Chats on your Profile. Chats use quick messages, like Free tonight? or Good game.',
+      'Challenges and private feedback between you and a friend show up in the chat too.',
+      'When a doubles challenge is accepted, all four players get a game chat. Delete it any time. It only goes away for you.',
     ],
+  },
+  {
+    title: 'Singles and doubles',
+    lines: ['Singles is you against one other player. Your singles record is built in.', 'Doubles is team against team. A team is you and one friend.'],
   },
   {
     title: 'Teams',
     lines: [
-      'On your profile tap Teams to see your teams or make a new one. You can only team up with a friend, and only once with the same person.',
-      'If you delete a team it leaves your teams and the leaderboards, and any waiting challenges are cancelled. Past matches stay in history. You can not undo it from the app.',
+      'On your Profile tap Teams to see your teams or make one. You can only team up with a friend, and only once with the same person.',
+      'Deleting a team removes it from the leaderboards and cancels waiting challenges. Past matches stay in history. You can not undo it.',
     ],
   },
   {
     title: 'Friends',
     lines: [
-      'Your friends live on your profile. Tap Friends there to chat, see requests, and unfriend.',
-      'Friends can chat with you and team up with you. To add someone, search them on Find people and send a request. They have to accept.',
+      'Tap Friends on your Profile. Tap a name to see their profile, or tap Chat to message them.',
+      'To add someone, find them on Find people and send a request. They have to accept.',
+      'To unfriend, go to the bottom of their profile.',
     ],
   },
   {
     title: 'Courts and leaderboards',
     lines: [
-      'Every court ranks its teams. Be number one with 6 wins at a court and you earn the crown.',
-      'Tap a court to see conditions, lights and its leaderboard. You can report what it is like right now, like wet or crowded.',
+      'The Courts tab shows courts within 10 miles. Tap Show all courts nearby to reach 25 miles.',
+      'Every court ranks its teams. Be number one with 6 wins and you take the crown.',
+      'Tap a court to see conditions, lights and its leaderboard. You can report how it is right now.',
     ],
   },
   {
     title: 'Adding a court',
     lines: [
-      'Check the list first. If it is already on Sickle, use that one.',
-      'Public courts go on the map for everyone after an admin checks them. Private courts (a backyard or gated court) are only seen by you and your friends.',
-      'You can add 3 courts a day. A private court can not be within 200 feet of a public court, so use the public one there.',
+      'Check the list first. If the court is already on Sickle, use that one.',
+      'Public courts go on the map after an admin checks them. Private courts are only seen by you and your friends.',
+      'You can add 3 courts a day. A private court can not be within 200 feet of a public court.',
     ],
   },
   {
     title: 'Alerts',
     lines: [
-      'Sickle can tell you about challenges, teams, friend requests, court conditions and messages. Turn each one on or off in Settings under Notifications.',
-      'Every alert is also saved in the Alerts button on the Play tab.',
+      'Sickle can alert you about challenges, teams, friend requests, court conditions and messages. Turn each on or off in Settings.',
+      'Every alert is also saved under Alerts on the Play tab.',
     ],
   },
   {
-    title: 'Your profile, name and username',
+    title: 'Your profile',
     lines: [
-      'Your username and name are set when you sign up and can not be changed later. Your skill level you can change any time.',
-      'Your record, teams and friends are on your profile. You can hide your record from other players in Settings.',
+      'Your name and username are set when you sign up and can not be changed. You can change your rating any time.',
+      'Your record is one total. Tap Filters to see singles or doubles, and games against the same or different teams. It changes your match history too.',
+      'You can hide your record from other players in Settings.',
     ],
   },
 ];
@@ -86,7 +95,7 @@ const topics: Topic[] = [
 // Everything about how Sickle works, in one place, so the other screens can stay simple.
 export default function HelpScreen() {
   return (
-    <Screen>
+    <Screen help={false}>
       <View style={{ gap: 6, paddingTop: 8 }}>
         <Display size={30}>HOW SICKLE WORKS</Display>
         <Body tone="muted">Tap a topic to read more.</Body>
@@ -103,11 +112,8 @@ export default function HelpScreen() {
         </InfoDrop>
       ))}
       <View style={{ gap: 8 }}>
-        <Heading size={14}>SKILL LEVELS</Heading>
-        <SkillGuide
-          title="WHAT DO THE LEVELS MEAN?"
-          intro="The number by a name is their skill level, from 2.0 (new) to 5.5 and up (pro). Same scale as DUPR."
-        />
+        <Heading size={14}>RATINGS</Heading>
+        <SkillGuide title="WHAT DO THE RATINGS MEAN?" intro="Ratings run from 2.0 (new) to 5.5 and up (pro). Same scale as DUPR." />
       </View>
       <Link href="/rules" asChild>
         <Button label="Pickleball rules" variant="outline" />

@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { tierOf } from '@/components/SkillPicker';
-import { HelpFooter } from '@/components/HelpFooter';
+import { RecordFilters } from '@/components/RecordFilters';
 import { ShowMore, usePaged } from '@/components/ShowMore';
 import { Avatar, Body, Button, Card, Display, Heading, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
@@ -11,6 +11,7 @@ import { initialsOf } from '@/lib/format';
 import { fetchUnreadCount } from '@/lib/chat';
 import { fetchFriends } from '@/lib/friends';
 import { fetchMyTeams, fetchRatingSummary, matchStatusText, RatingSummary, refreshChallenges, TeamRow, useChallenges } from '@/lib/matches';
+import { applyRecordFilter, noRecordFilter, RecordFilter, recordFilterCount } from '@/lib/record';
 import { useProfile } from '@/lib/profile';
 import { formatScores } from '@/lib/scores';
 import { useTheme } from '@/lib/theme';
@@ -25,6 +26,7 @@ export default function ProfileScreen() {
   const [friendCount, setFriendCount] = useState(0);
   const [unread, setUnread] = useState(0);
   const [requests, setRequests] = useState(0);
+  const [filter, setFilter] = useState<RecordFilter>(noRecordFilter);
 
   useFocusEffect(
     useCallback(() => {
@@ -41,13 +43,18 @@ export default function ProfileScreen() {
 
   const name = profile?.display_name ?? '';
   const doubles = teams.filter((t) => !t.is_singles);
-  const solo = teams.find((t) => t.is_singles);
-  const wins = teams.reduce((n, t) => n + Number(t.wins), 0);
-  const losses = teams.reduce((n, t) => n + Number(t.losses), 0);
-  const played = wins + losses;
+  const singlesIds = new Set(teams.filter((t) => t.is_singles).map((t) => t.team_id));
   const history = (challenges ?? []).filter((c) => c.match_id);
-  const paged = usePaged(history, 5);
-  const singlesRecord = solo ? `${solo.wins}–${solo.losses}` : '0–0';
+  // One record for everything. The filters change the record and the history together.
+  const filtered = applyRecordFilter(
+    history.map((c) => ({ c, singles: singlesIds.has(c.my_team_id), opponent: c.their_team_id })),
+    filter,
+  ).map((x) => x.c);
+  const confirmed = filtered.filter((c) => c.match_status === 'confirmed');
+  const wins = confirmed.filter((c) => c.i_won).length;
+  const losses = confirmed.length - wins;
+  const opponents = new Set(confirmed.map((c) => c.their_team_id)).size;
+  const paged = usePaged(filtered, 5);
 
   return (
     <Screen>
@@ -72,15 +79,18 @@ export default function ProfileScreen() {
         <View style={{ gap: 4, flex: 1 }}>
           <Display size={28}>{name.toUpperCase()}</Display>
           <Body size={13} tone="muted">
-            {profile?.skill_level ? `${Number(profile.skill_level).toFixed(1)} · ${tierOf(Number(profile.skill_level))}` : 'No skill level yet. Set it in Settings.'}
+            {profile?.skill_level ? `${Number(profile.skill_level).toFixed(1)} · ${tierOf(Number(profile.skill_level))}` : 'No rating yet. Set it in Settings.'}
           </Body>
         </View>
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Stat value={`${wins}–${losses}`} label="Record" />
-        <Stat value={played ? `${Math.round((wins / played) * 100)}%` : '–'} label="Win rate" />
-        <Stat value={singlesRecord} label="Singles" />
+      <View style={{ gap: 10 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Stat value={`${wins}–${losses}`} label="Record" />
+          <Stat value={confirmed.length ? `${Math.round((wins / confirmed.length) * 100)}%` : '–'} label="Win rate" />
+          <Stat value={String(opponents)} label="Opponents" />
+        </View>
+        <RecordFilters filter={filter} onChange={setFilter} />
       </View>
 
       <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -93,22 +103,38 @@ export default function ProfileScreen() {
               <Body size={13} weight="semibold">
                 Teams
               </Body>
-              <Body size={12} tone="muted">
-                See and manage
-              </Body>
             </Card>
           </Pressable>
         </Link>
         <Link href="/my-friends" asChild>
           <Pressable accessibilityRole="link" style={{ flex: 1 }}>
-            <Card style={{ padding: 12, gap: 2 }} highlighted={unread + requests > 0}>
+            <Card style={{ padding: 12, gap: 2 }} highlighted={requests > 0}>
               <Heading size={22}>{friendCount}</Heading>
               <Body size={13} weight="semibold">
                 Friends
               </Body>
-              <Body size={12} tone={unread + requests > 0 ? 'danger' : 'muted'}>
-                {unread + requests > 0 ? `${unread + requests} new` : 'Chat and requests'}
+              {requests > 0 ? (
+                <Body size={12} tone="danger">
+                  {requests} {requests === 1 ? 'request' : 'requests'}
+                </Body>
+              ) : null}
+            </Card>
+          </Pressable>
+        </Link>
+        <Link href="/chats" asChild>
+          <Pressable accessibilityRole="link" style={{ flex: 1 }}>
+            <Card style={{ padding: 12, gap: 2 }} highlighted={unread > 0}>
+              <Heading size={22} tone={unread > 0 ? 'danger' : 'default'}>
+                {unread}
+              </Heading>
+              <Body size={13} weight="semibold">
+                Chats
               </Body>
+              {unread > 0 ? (
+                <Body size={12} tone="danger">
+                  new
+                </Body>
+              ) : null}
             </Card>
           </Pressable>
         </Link>
@@ -135,17 +161,22 @@ export default function ProfileScreen() {
                 </Body>
               </Body>
             ) : (
-              <Body tone="muted">After ranked matches, players can privately rate your level. It shows up here.</Body>
+              <Body tone="muted">Players can privately rate your level after ranked matches.</Body>
             )}
           </Card>
         </Pressable>
       </Link>
 
       <View style={{ gap: 6 }}>
-        <SectionHeader title="Match history" />
+        <SectionHeader title="Match history" detail={recordFilterCount(filter) > 0 ? `${filtered.length} of ${history.length}` : undefined} />
+        {history.length > 0 && filtered.length === 0 ? (
+          <Card style={{ padding: 16 }}>
+            <Body tone="muted">No matches fit these filters.</Body>
+          </Card>
+        ) : null}
         {history.length === 0 ? (
           <Card style={{ padding: 16 }}>
-            <Body tone="muted">No matches yet. Send a challenge to get started.</Body>
+            <Body tone="muted">No matches yet. Send a challenge to start.</Body>
           </Card>
         ) : null}
         {paged.shown.map((match) => {
@@ -189,7 +220,6 @@ export default function ProfileScreen() {
         <Button label="Pickleball rules" variant="outline" />
       </Link>
 
-      <HelpFooter />
     </Screen>
   );
 }

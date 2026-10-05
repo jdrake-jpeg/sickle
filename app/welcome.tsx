@@ -1,60 +1,43 @@
-import { Link, router } from 'expo-router';
-import { View } from 'react-native';
+import { router } from 'expo-router';
+import { useWindowDimensions, View } from 'react-native';
 
-import { Body, Button, Card, Display, Heading, Screen } from '@/components/ui';
+import { Logo } from '@/components/Logo';
+import { Body, Button, Card, Display, Heading, InfoDrop, Screen } from '@/components/ui';
 
 const steps: { title: string; body: string }[] = [
-  {
-    title: 'Go to Play and tap Go',
-    body: 'Looking to Play tells players nearby you want a game. While it is on, people can find you and send you challenges. Tap Turn off when you are done. Others only see a rough distance, never your exact spot.',
-  },
-  {
-    title: 'Challenge someone',
-    body: 'Tap a player on Play or Find people. On their profile pick singles or doubles and one game or best of 3, then pick a court and time. They can accept or decline.',
-  },
-  {
-    title: 'Play, then enter the score',
-    body: 'After the game one side enters the score under Challenges and the other side confirms it. Only confirmed games count for wins, records and leaderboards.',
-  },
-  {
-    title: 'Add friends, then make a team',
-    body: 'Doubles is team against team. A team is you and a friend, and you can only team up with people who are your friends. Add a friend from the Find people tab, then make a team from Teams on your Profile.',
-  },
-  {
-    title: 'Courts have leaderboards',
-    body: 'Every court ranks its teams. Be #1 with 6 wins at a court and you get the crown. Not on the list? Add your court. You can add 3 a day.',
-  },
-  {
-    title: 'You choose your alerts',
-    body: 'Sickle can tell you about challenges, teams, friend requests and court conditions. Turn each one on or off any time in Settings.',
-  },
+  { title: 'Find people', body: 'Search or browse players near you.' },
+  { title: 'Challenge them', body: 'Pick singles or doubles, a court and a time.' },
+  { title: 'Make friends, then teams', body: 'Add friends. A doubles team is you and a friend.' },
+  { title: 'King of the court', body: 'The team with the most wins at a court takes the crown.' },
 ];
 
 // Shown once after signing up, and any time from Settings.
 export default function WelcomeScreen() {
+  const { width } = useWindowDimensions();
   return (
-    <Screen>
-      <View style={{ gap: 6, paddingTop: 8 }}>
-        <Display size={32}>WELCOME TO SICKLE</Display>
-        <Body tone="muted">Here are some things you should know to get the most out of it.</Body>
+    <Screen help={false}>
+      <View style={{ alignItems: 'center', gap: 4, paddingTop: 8 }}>
+        <Logo width={Math.min(width - 48, 340)} />
+        <Display size={32}>WELCOME</Display>
       </View>
 
       {steps.map((s, i) => (
-        <Card key={s.title} style={{ padding: 16, gap: 6 }}>
-          <Heading size={16}>
-            {i + 1}. {s.title.toUpperCase()}
-          </Heading>
-          <Body size={14} tone="muted">
-            {s.body}
-          </Body>
+        <Card key={s.title} style={{ padding: 14, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <Display size={28} tone="accent">
+            {i + 1}
+          </Display>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Heading size={16}>{s.title.toUpperCase()}</Heading>
+            <Body size={14} tone="muted">
+              {s.body}
+            </Body>
+          </View>
         </Card>
       ))}
 
-      <Link href="/help" asChild>
-        <Button label="Read the full guide" variant="outline" />
-      </Link>
+      <InfoDrop title="Look for these arrows for tips">Tap an arrow like this one to read a quick tip.</InfoDrop>
 
-      <Button label="Got it, let's play" size="lg" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
+      <Button label="Let's play" size="lg" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
     </Screen>
   );
 }

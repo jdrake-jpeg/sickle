@@ -4,14 +4,14 @@ import { Alert, Pressable, View } from 'react-native';
 
 import { ShowMore, usePaged } from '@/components/ShowMore';
 import { skillLabel } from '@/components/SkillPicker';
-import { Avatar, Body, Button, Card, Display, ListRow, Screen, SectionHeader } from '@/components/ui';
+import { Avatar, Body, Button, Card, Display, Screen, SectionHeader } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { Conversation, fetchConversations } from '@/lib/chat';
 import { initialsOf } from '@/lib/format';
 import { addFriend, fetchFriends, FriendRow, removeFriend } from '@/lib/friends';
 
-// Your friends: answer requests, chat, unfriend, and see who you asked.
-// Finding new people is on the Find people tab.
+// Your friends: answer requests, open a profile, or tap Chat. Unfriending is
+// at the bottom of their profile. Finding new people is on the Find people tab.
 export default function MyFriendsScreen() {
   const { demoMode } = useAuth();
   const [friends, setFriends] = useState<FriendRow[] | null>(null);
@@ -42,35 +42,41 @@ export default function MyFriendsScreen() {
     }
   };
 
-  const askUnfriend = (p: FriendRow) =>
-    Alert.alert(`Unfriend ${p.name.split(' ')[0]}?`, "You won't be able to chat. You can add each other again later.", [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Unfriend', style: 'destructive', onPress: () => run(p.id, () => removeFriend(demoMode, p.id)) },
-    ]);
-
   const all = friends ?? [];
   const incoming = all.filter((f) => f.relation === 'incoming');
   const accepted = all.filter((f) => f.relation === 'friend');
   const sent = all.filter((f) => f.relation === 'outgoing');
   const paged = usePaged(accepted, 8);
 
-  const person = (p: FriendRow, subtitle: string, right: ReactNode, chat = false) => (
-    <Link
-      key={p.id}
-      href={chat ? { pathname: '/chat/[id]', params: { id: p.id, name: p.name } } : { pathname: '/player/[id]', params: { id: p.id } }}
-      asChild>
-      <Pressable accessibilityRole="link">
-        <ListRow left={<Avatar initials={initialsOf(p.name)} size={40} />} title={p.name} subtitle={subtitle} right={right} />
-      </Pressable>
-    </Link>
+  // Name and photo open their profile. The right side holds the buttons.
+  const person = (p: FriendRow, subtitle: string, right: ReactNode) => (
+    <Card key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 16 }}>
+      <Link href={{ pathname: '/player/[id]', params: { id: p.id } }} asChild>
+        <Pressable accessibilityRole="link" style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Avatar initials={initialsOf(p.name)} size={40} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Body weight="semibold">{p.name}</Body>
+            <Body size={13} tone="muted" numberOfLines={1}>
+              {subtitle}
+            </Body>
+          </View>
+        </Pressable>
+      </Link>
+      {right}
+    </Card>
   );
 
   return (
     <Screen>
       <Display size={28}>MY FRIENDS</Display>
-      <Link href="/friends" asChild>
-        <Button label="Find more people" variant="outline" size="sm" style={{ alignSelf: 'flex-start' }} />
-      </Link>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Link href="/friends" asChild>
+          <Button label="Find people" variant="outline" size="sm" />
+        </Link>
+        <Link href="/chats" asChild>
+          <Button label="Chats" variant="outline" size="sm" />
+        </Link>
+      </View>
 
       {incoming.length > 0 ? (
         <View style={{ gap: 8 }}>
@@ -93,7 +99,7 @@ export default function MyFriendsScreen() {
         {friends === null ? <Body tone="muted">Loading…</Body> : null}
         {friends && accepted.length === 0 ? (
           <Card style={{ padding: 16 }}>
-            <Body tone="muted">No friends yet. Tap Find more people to add some.</Body>
+            <Body tone="muted">No friends yet. Tap Find people to add some.</Body>
           </Card>
         ) : null}
         {paged.shown.map((p) => {
@@ -101,23 +107,9 @@ export default function MyFriendsScreen() {
           return person(
             p,
             chat ? `${chat.last_mine ? 'You: ' : ''}${chat.last_body}` : [`@${p.username}`, skillLabel(p.skill)].filter(Boolean).join(' · '),
-            <View style={{ alignItems: 'flex-end', gap: 2 }}>
-              {chat && chat.unread > 0 ? (
-                <Body size={13} weight="bold" tone="danger">
-                  {chat.unread} new
-                </Body>
-              ) : (
-                <Body size={13} weight="bold" tone="accent">
-                  Chat
-                </Body>
-              )}
-              <Pressable accessibilityRole="button" disabled={busy === p.id} onPress={() => askUnfriend(p)} hitSlop={8}>
-                <Body size={12} tone="muted">
-                  Unfriend
-                </Body>
-              </Pressable>
-            </View>,
-            true,
+            <Link href={{ pathname: '/chat/[id]', params: { id: p.id, name: p.name } }} asChild>
+              <Button label={chat && chat.unread > 0 ? `Chat (${chat.unread})` : 'Chat'} size="sm" />
+            </Link>,
           );
         })}
         <ShowMore hasMore={paged.hasMore} remaining={paged.remaining} onPress={paged.more} />

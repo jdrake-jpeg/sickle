@@ -63,15 +63,10 @@ export function PlayPrefs() {
           options={[
             { value: 'everyone', label: 'Everyone' },
             { value: 'friends', label: 'Friends' },
-            { value: 'nobody', label: 'Nobody' },
           ]}
         />
         <Body size={13} tone="muted">
-          {settings.challenges_from === 'everyone'
-            ? 'Anyone can challenge you.'
-            : settings.challenges_from === 'friends'
-              ? 'Only friends can challenge you.'
-              : 'Paused. Nobody can challenge you.'}
+          {settings.challenges_from === 'everyone' ? 'Anyone can challenge you.' : 'Only friends can challenge you.'}
         </Body>
       </View>
       {toggle('Open to singles', 'Show up when people look for singles.', settings.plays_singles, (v) => change({ plays_singles: v }))}
@@ -114,7 +109,6 @@ export function LookingFor({ settings, onChange }: { settings: PlaySettings; onC
           options={[
             { value: 'everyone', label: 'Anyone' },
             { value: 'friends', label: 'Friends' },
-            { value: 'nobody', label: 'Nobody' },
           ]}
         />
       </View>

@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 // These come from the 20261013 database update. On a database that doesn't
 // have it yet, everything here quietly falls back to "no limits, no crowns".
 
-export type ChallengesFrom = 'everyone' | 'friends' | 'nobody';
+export type ChallengesFrom = 'everyone' | 'friends';
 
 export type PlaySettings = {
   plays_singles: boolean;
@@ -25,7 +25,8 @@ export async function fetchPlaySettings(demoMode: boolean, profileId: string | u
     .eq('id', profileId)
     .maybeSingle();
   if (error || !data) return null;
-  return data as PlaySettings;
+  // 'nobody' was removed; old rows count as everyone.
+  return { ...data, challenges_from: data.challenges_from === 'friends' ? 'friends' : 'everyone' } as PlaySettings;
 }
 
 export async function savePlaySettings(demoMode: boolean, profileId: string, change: Partial<PlaySettings>): Promise<void> {

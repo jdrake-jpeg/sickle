@@ -106,7 +106,9 @@ function toSpots(elements, areas) {
     if (tags['operator:type'] === 'private' || tags.location === 'private' || tags.private) continue;
     const name = tags.name;
     if (name && (notACourt.test(name) || privateName.test(name))) continue;
-    if (!/pickleball/.test(tags.sport ?? '') && !/pickle ?ball/i.test(name ?? '')) continue;
+    // Courts tagged for pickleball, tennis courts with pickleball lines, or named for it.
+    const tagged = /pickleball/.test(tags.sport ?? '') || /pickleball/.test(tags.lines ?? '') || tags.pickleball === 'yes';
+    if (!tagged && !/pickle ?ball/i.test(name ?? '')) continue;
     // A house number and no name is somebody's yard.
     if (!name && tags['addr:housenumber']) continue;
     const inPark = name ? null : areaAt(areas, lat, lng);
@@ -119,6 +121,11 @@ function toSpots(elements, areas) {
         merged = (grid.get(`${gx + dx},${gy + dy}`) ?? []).find((s) => miles({ lat: s.la, lng: s.lo }, { lat, lng }) < 0.06) ?? null;
       }
     }
+    // Same park again (a second court across the park): one pin per park.
+    if (!name && inPark) {
+      const same = spots.find((sp) => sp.park === inPark && miles({ lat: sp.la, lng: sp.lo }, { lat, lng }) < 0.5);
+      if (same) continue;
+    }
     const count = Number(tags.courts) > 0 ? Number(tags.courts) : null;
     if (merged) {
       if (name && !merged.named) Object.assign(merged, { n: name, named: true });
@@ -127,7 +134,8 @@ function toSpots(elements, areas) {
     }
     const street = tags['addr:street'];
     const spot = {
-      n: name ?? `Pickleball courts at ${inPark}`.slice(0, 60),
+      n: (name ?? inPark).slice(0, 60),
+      park: name ? undefined : inPark,
       a: street ?? undefined,
       la: Math.round(lat * 1e6) / 1e6,
       lo: Math.round(lng * 1e6) / 1e6,
@@ -139,7 +147,7 @@ function toSpots(elements, areas) {
     const key = `${gx},${gy}`;
     grid.set(key, [...(grid.get(key) ?? []), spot]);
   }
-  return spots.map(({ named, ...s }) => s);
+  return spots.map(({ named, park, ...s }) => s);
 }
 
 const fromIndex = process.argv.indexOf('--from');
@@ -149,7 +157,7 @@ const sample = sampleFile ? sampleFile.elements ?? [] : null;
 const all = [];
 for (const state of states) {
   console.log(`${state.name}...`);
-  const query = `[out:json][timeout:180];area["ISO3166-2"="${state.code}"]->.a;(nwr["sport"~"pickleball"](area.a);nwr["name"~"pickle ?ball",i](area.a););out center tags;`;
+  const query = `[out:json][timeout:180];area["ISO3166-2"="${state.code}"]->.a;(nwr["sport"~"pickleball"](area.a);nwr["lines"~"pickleball"](area.a);nwr["pickleball"="yes"](area.a);nwr["name"~"pickle ?ball",i](area.a););out center tags;`;
   // A finished state is saved, so a rerun skips it.
   const saved = `supabase/seed/.v2.${state.code}.json`;
   let spots;

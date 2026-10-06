@@ -94,7 +94,7 @@ begin
     v_name := coalesce(nullif(left(btrim(coalesce(v_spot ->> 'n', '')), 60), ''), 'Pickleball courts');
     v_count := nullif(v_spot ->> 'c', '')::integer;
     -- Unnamed courts are only seeded when the script found the park or school
-    -- they sit in ("Pickleball courts at <place>").
+    -- they sit in (named after that place).
     continue when v_place is null or v_lat is null or v_lng is null
       or v_lat not between -90 and 90 or v_lng not between -180 and 180
       or public.is_home_court_name(v_name);

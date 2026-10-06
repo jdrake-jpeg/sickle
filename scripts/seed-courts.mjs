@@ -24,6 +24,43 @@ const chunk = 250;
 
 // Same rules as the app (lib/courts.ts).
 const notACourt = /\b(shop|store|outlet|supply|supplies|gear|apparel|sports? (goods|authority)|academy|lessons?|coach(ing)?|club ?house|restaurant|grill|bar)\b/i;
+// Home and neighborhood courts: not for the public, so they never get a pin.
+const privateName = /\b(home|house|residen\w*|private|backyard|back yard|driveway|family|hoa|apartments?|condos?|townhomes?|villas?|estates?|ranch|farm|my|our)\b/i;
+const publicAccess = new Set(['yes', 'permissive', 'public', 'customers_and_members']);
+
+// A court nobody named is only kept when it sits inside a named park, school
+// or rec center. That is how backyard courts (almost always unnamed, on a lot
+// with a house number) get left out.
+function insideRing(pt, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const yi = ring[i].lat, xi = ring[i].lon, yj = ring[j].lat, xj = ring[j].lon;
+    if (yi > pt.lat !== yj > pt.lat && pt.lng < ((xj - xi) * (pt.lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function makeAreas(elements) {
+  const list = [];
+  for (const el of elements) {
+    const name = el.tags?.name;
+    if (!name || notACourt.test(name) || privateName.test(name)) continue;
+    if (el.type === 'way' && el.geometry?.length > 3) {
+      const lats = el.geometry.map((g) => g.lat), lons = el.geometry.map((g) => g.lon);
+      list.push({ name, ring: el.geometry, box: [Math.min(...lats), Math.min(...lons), Math.max(...lats), Math.max(...lons)] });
+    } else if (el.bounds) {
+      const b = el.bounds;
+      list.push({ name, ring: null, box: [b.minlat, b.minlon, b.maxlat, b.maxlon] });
+    }
+  }
+  const size = (a) => (a.box[2] - a.box[0]) * (a.box[3] - a.box[1]);
+  return list.sort((a, b) => size(a) - size(b));
+}
+
+// The smallest named park, school or rec center that contains the point.
+function areaAt(areas, lat, lng) {
+  return areas.find((a) => lat >= a.box[0] && lat <= a.box[2] && lng >= a.box[1] && lng <= a.box[3] && (!a.ring || insideRing({ lat, lng }, a.ring)))?.name ?? null;
+}
 
 function miles(a, b) {
   const rad = Math.PI / 180;
@@ -55,7 +92,7 @@ async function overpass(query) {
   throw new Error('No map server answered. Run it again in a few minutes. States that finished are saved, so it picks up where it left off.');
 }
 
-function toSpots(elements) {
+function toSpots(elements, areas) {
   // Bucket by roughly 0.01 degrees so merging stays fast.
   const grid = new Map();
   const spots = [];
@@ -64,10 +101,16 @@ function toSpots(elements) {
     const lng = el.lon ?? el.center?.lon;
     if (lat === undefined || lng === undefined) continue;
     const tags = el.tags ?? {};
-    if (tags.access === 'private' || tags.access === 'no') continue;
+    // Anything marked as not open to everyone is out.
+    if (tags.access && !publicAccess.has(tags.access)) continue;
+    if (tags['operator:type'] === 'private' || tags.location === 'private' || tags.private) continue;
     const name = tags.name;
-    if (name && notACourt.test(name)) continue;
+    if (name && (notACourt.test(name) || privateName.test(name))) continue;
     if (!/pickleball/.test(tags.sport ?? '') && !/pickle ?ball/i.test(name ?? '')) continue;
+    // A house number and no name is somebody's yard.
+    if (!name && tags['addr:housenumber']) continue;
+    const inPark = name ? null : areaAt(areas, lat, lng);
+    if (!name && !inPark) continue;
     const gx = Math.floor(lat * 100);
     const gy = Math.floor(lng * 100);
     let merged = null;
@@ -84,7 +127,7 @@ function toSpots(elements) {
     }
     const street = tags['addr:street'];
     const spot = {
-      n: name ?? (street ? `Pickleball courts on ${street}` : 'Pickleball courts'),
+      n: name ?? `Pickleball courts at ${inPark}`.slice(0, 60),
       a: street ?? undefined,
       la: Math.round(lat * 1e6) / 1e6,
       lo: Math.round(lng * 1e6) / 1e6,
@@ -100,20 +143,26 @@ function toSpots(elements) {
 }
 
 const fromIndex = process.argv.indexOf('--from');
-const sample = fromIndex > -1 ? JSON.parse(readFileSync(process.argv[fromIndex + 1], 'utf8')).elements ?? [] : null;
+const sampleFile = fromIndex > -1 ? JSON.parse(readFileSync(process.argv[fromIndex + 1], 'utf8')) : null;
+const sample = sampleFile ? sampleFile.elements ?? [] : null;
 
 const all = [];
 for (const state of states) {
   console.log(`${state.name}...`);
   const query = `[out:json][timeout:180];area["ISO3166-2"="${state.code}"]->.a;(nwr["sport"~"pickleball"](area.a);nwr["name"~"pickle ?ball",i](area.a););out center tags;`;
   // A finished state is saved, so a rerun skips it.
-  const saved = `supabase/seed/.${state.code}.json`;
+  const saved = `supabase/seed/.v2.${state.code}.json`;
   let spots;
   if (!sample && existsSync(saved)) {
     spots = JSON.parse(readFileSync(saved, 'utf8'));
     console.log('  already done, using the saved copy');
   } else {
-    spots = toSpots(sample ?? (await overpass(query)));
+    const courts = sample ?? (await overpass(query));
+    console.log('  looking up the parks and schools they sit in');
+    const areaQuery = `[out:json][timeout:180];area["ISO3166-2"="${state.code}"]->.a;(way["leisure"~"^(park|recreation_ground|sports_centre|stadium)$"]["name"](area.a);way["amenity"~"^(school|college|university)$"]["name"](area.a);way["landuse"="recreation_ground"]["name"](area.a);)->.w;(relation["leisure"~"^(park|recreation_ground|sports_centre)$"]["name"](area.a);relation["amenity"~"^(school|college|university)$"]["name"](area.a);)->.r;.w out geom tags;.r out bb tags;`;
+    const areas = makeAreas(sampleFile ? sampleFile.areas ?? [] : await overpass(areaQuery));
+    console.log(`  ${areas.length} parks, schools and rec centers`);
+    spots = toSpots(courts, areas);
     if (!sample) {
       mkdirSync(dirname(saved), { recursive: true });
       writeFileSync(saved, JSON.stringify(spots));

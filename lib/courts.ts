@@ -194,6 +194,10 @@ async function overpass(query: string): Promise<OsmElement[] | null> {
   return null;
 }
 
+// Home and neighborhood courts are not for the public, so they never get a pin.
+const privateName = /\b(home|house|residen\w*|private|backyard|back yard|driveway|family|hoa|apartments?|condos?|townhomes?|villas?|estates?|ranch|farm|my|our)\b/i;
+const publicAccess = new Set(['yes', 'permissive', 'public', 'customers_and_members']);
+
 // Pickleball courts on OpenStreetMap: courts and parks tagged for pickleball,
 // and anything with pickleball in its name (clubs, parks). Each court there is
 // often its own shape, so ones within ~100 m are merged into one pin.
@@ -208,10 +212,14 @@ export async function findOsmCourts(near: { lat: number; lng: number }, miles = 
     const lng = el.lon ?? el.center?.lon;
     if (lat === undefined || lng === undefined) continue;
     const tags = el.tags ?? {};
-    if (tags.access === 'private' || tags.access === 'no') continue;
+    // Anything not open to everyone is out (private, customers, permit, members...).
+    if (tags.access && !publicAccess.has(tags.access)) continue;
+    if (tags['operator:type'] === 'private' || tags.location === 'private' || tags.private) continue;
     const name = tags.name;
-    // Shops and the like that happen to have pickleball in the name.
-    if (name && notACourt.test(name)) continue;
+    // Backyard courts are almost never named, so an unnamed court never gets a pin.
+    if (!name) continue;
+    // Shops and the like that happen to have pickleball in the name, and homes.
+    if (notACourt.test(name) || privateName.test(name)) continue;
     // Named but not a court at all (a road, a lake): needs a court tag or a pickleball name.
     if (!/pickleball/.test(tags.sport ?? '') && !/pickle ?ball/i.test(name ?? '')) continue;
     const merged = spots.find((s) => milesBetween(s, { lat, lng }) < 0.06);
@@ -222,7 +230,7 @@ export async function findOsmCourts(near: { lat: number; lng: number }, miles = 
     const street = tags['addr:street'];
     spots.push({
       place_id: `osm:${el.type}/${el.id}`,
-      name: name ?? (street ? `Pickleball courts on ${street}` : 'Pickleball courts'),
+      name,
       address: street ?? null,
       lat,
       lng,

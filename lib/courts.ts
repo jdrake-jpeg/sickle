@@ -167,7 +167,16 @@ function isPickleballCourt(g: GoogleCourt) {
   return /pickle ?ball/i.test(g.name) && !notACourt.test(g.name);
 }
 
-type OsmElement = { type: string; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> };
+type OsmElement = {
+  type: string;
+  id: number;
+  lat?: number;
+  lon?: number;
+  center?: { lat: number; lon: number };
+  tags?: Record<string, string>;
+  geometry?: { lat: number; lon: number }[];
+  bounds?: { minlat: number; minlon: number; maxlat: number; maxlon: number };
+};
 
 // Free OpenStreetMap servers. If one is busy, the next one is tried.
 const overpassServers = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
@@ -198,16 +207,65 @@ async function overpass(query: string): Promise<OsmElement[] | null> {
 const privateName = /\b(home|house|residen\w*|private|backyard|back yard|driveway|family|hoa|apartments?|condos?|townhomes?|villas?|estates?|ranch|farm|my|our)\b/i;
 const publicAccess = new Set(['yes', 'permissive', 'public', 'customers_and_members']);
 
-// Pickleball courts on OpenStreetMap: courts and parks tagged for pickleball,
-// and anything with pickleball in its name (clubs, parks). Each court there is
-// often its own shape, so ones within ~100 m are merged into one pin.
+// A park, school or rec center a court sits in. Courts nobody named take its
+// name, so the pin says "Quail Valley Park" and not just "Pickleball courts".
+type NamedArea = { name: string; ring: { lat: number; lon: number }[] | null; box: [number, number, number, number] };
+
+function insideRing(pt: { lat: number; lng: number }, ring: { lat: number; lon: number }[]) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const yi = ring[i].lat, xi = ring[i].lon, yj = ring[j].lat, xj = ring[j].lon;
+    if (yi > pt.lat !== yj > pt.lat && pt.lng < ((xj - xi) * (pt.lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function namedAreas(elements: OsmElement[]): NamedArea[] {
+  const list: NamedArea[] = [];
+  for (const el of elements) {
+    const name = el.tags?.name;
+    if (!name || el.center || notACourt.test(name) || privateName.test(name)) continue;
+    if (el.type === 'way' && el.geometry && el.geometry.length > 3) {
+      const lats = el.geometry.map((g) => g.lat);
+      const lons = el.geometry.map((g) => g.lon);
+      list.push({ name, ring: el.geometry, box: [Math.min(...lats), Math.min(...lons), Math.max(...lats), Math.max(...lons)] });
+    } else if (el.bounds) {
+      list.push({ name, ring: null, box: [el.bounds.minlat, el.bounds.minlon, el.bounds.maxlat, el.bounds.maxlon] });
+    }
+  }
+  const size = (a: NamedArea) => (a.box[2] - a.box[0]) * (a.box[3] - a.box[1]);
+  return list.sort((a, b) => size(a) - size(b));
+}
+
+// The smallest named park or school that holds the point.
+function areaAt(areas: NamedArea[], lat: number, lng: number): string | null {
+  const hit = areas.find(
+    (a) => lat >= a.box[0] && lat <= a.box[2] && lng >= a.box[1] && lng <= a.box[3] && (!a.ring || insideRing({ lat, lng }, a.ring)),
+  );
+  return hit?.name ?? null;
+}
+
+// Pickleball courts on OpenStreetMap: courts tagged for pickleball (tennis
+// courts with pickleball lines too), and anything with pickleball in its name.
+// A court nobody named is kept only when it sits inside a named park or school,
+// and takes that name. Courts within ~100 m merge into one pin, and one pin
+// per park.
 export async function findOsmCourts(near: { lat: number; lng: number }, miles = widerMiles): Promise<GoogleCourt[]> {
   const around = `(around:${Math.round(miles * 1609)},${near.lat},${near.lng})`;
-  const query = `[out:json][timeout:20];(nwr["sport"~"pickleball"]${around};nwr["name"~"pickle ?ball",i]${around};);out center tags 500;`;
+  const query =
+    `[out:json][timeout:25];(nwr["sport"~"pickleball"]${around};nwr["lines"~"pickleball"]${around};nwr["pickleball"="yes"]${around};nwr["name"~"pickle ?ball",i]${around};)->.c;` +
+    `.c out center tags 500;` +
+    `.c is_in->.a;` +
+    `(way(pivot.a)["leisure"~"^(park|recreation_ground|sports_centre|stadium)$"]["name"];way(pivot.a)["amenity"~"^(school|college|university)$"]["name"];)->.w;` +
+    `(relation(pivot.a)["leisure"~"^(park|recreation_ground|sports_centre)$"]["name"];relation(pivot.a)["amenity"~"^(school|college|university)$"]["name"];)->.r;` +
+    `.w out geom tags;.r out bb tags;`;
   const elements = await overpass(query);
   if (!elements) return [];
-  const spots: (GoogleCourt & { named: boolean })[] = [];
+  const areas = namedAreas(elements);
+  const spots: (GoogleCourt & { named: boolean; park: string | null })[] = [];
   for (const el of elements) {
+    // Parks and schools come back in the same list; only courts have a center point here.
+    if (!(el.type === 'node' || el.center)) continue;
     const lat = el.lat ?? el.center?.lat;
     const lng = el.lon ?? el.center?.lon;
     if (lat === undefined || lng === undefined) continue;
@@ -216,25 +274,30 @@ export async function findOsmCourts(near: { lat: number; lng: number }, miles = 
     if (tags.access && !publicAccess.has(tags.access)) continue;
     if (tags['operator:type'] === 'private' || tags.location === 'private' || tags.private) continue;
     const name = tags.name;
-    // Backyard courts are almost never named, so an unnamed court never gets a pin.
-    if (!name) continue;
     // Shops and the like that happen to have pickleball in the name, and homes.
-    if (notACourt.test(name) || privateName.test(name)) continue;
-    // Named but not a court at all (a road, a lake): needs a court tag or a pickleball name.
-    if (!/pickleball/.test(tags.sport ?? '') && !/pickle ?ball/i.test(name ?? '')) continue;
-    const merged = spots.find((s) => milesBetween(s, { lat, lng }) < 0.06);
-    if (merged) {
-      if (name && !merged.named) Object.assign(merged, { name, named: true });
+    if (name && (notACourt.test(name) || privateName.test(name))) continue;
+    // Not a court at all (a road, a lake): needs a court tag or a pickleball name.
+    const tagged = /pickleball/.test(tags.sport ?? '') || /pickleball/.test(tags.lines ?? '') || tags.pickleball === 'yes';
+    if (!tagged && !/pickle ?ball/i.test(name ?? '')) continue;
+    // A house number and no name is somebody's yard.
+    if (!name && tags['addr:housenumber']) continue;
+    const park = name ? null : areaAt(areas, lat, lng);
+    // Backyard courts are almost never named and never inside a park.
+    if (!name && !park) continue;
+    if (spots.some((sp) => milesBetween(sp, { lat, lng }) < 0.06)) {
+      const merged = spots.find((sp) => milesBetween(sp, { lat, lng }) < 0.06);
+      if (merged && name && !merged.named) Object.assign(merged, { name, named: true, park: null });
       continue;
     }
-    const street = tags['addr:street'];
+    if (park && spots.some((sp) => sp.park === park && milesBetween(sp, { lat, lng }) < 0.5)) continue;
     spots.push({
       place_id: `osm:${el.type}/${el.id}`,
-      name,
-      address: street ?? null,
+      name: (name ?? park ?? '').slice(0, 60),
+      address: tags['addr:street'] ?? null,
       lat,
       lng,
       named: Boolean(name),
+      park,
     });
   }
   return spots.map(({ place_id, name, address, lat, lng }) => ({ place_id, name, address, lat, lng }));

@@ -8,11 +8,16 @@ import { TeamPick } from '@/components/TeamPick';
 import { VsLine } from '@/components/VsLine';
 import { Body, Button, Card, Display, Heading, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import { useProfile } from '@/lib/profile';
+import { PersonPicker, usePeopleOptions } from '@/components/PersonPicker';
 import {
+  acceptWithPartner,
   bestOfOf,
   cancelChallenge,
   ChallengeRow,
   fetchMyTeams,
+  fetchPendingChanges,
+  PendingChangeRow,
   formatWhen,
   matchStatusText,
   refreshChallenges,
@@ -29,6 +34,7 @@ type Tab = 'incoming' | 'sent' | 'upcoming' | 'played';
 export default function ChallengesScreen() {
   const { colors } = useTheme();
   const { demoMode } = useAuth();
+  const { profile } = useProfile();
   const rows = useChallenges(demoMode);
   const params = useLocalSearchParams<{ tab?: string }>();
   const [tab, setTab] = useState<Tab>('incoming');
@@ -37,6 +43,11 @@ export default function ChallengesScreen() {
   const [myTeams, setMyTeams] = useState<TeamRow[]>([]);
   // For doubles: which of your teams plays, picked per challenge.
   const [picks, setPicks] = useState<Record<string, string>>({});
+  // For a challenge that needs a partner: who you pick, per challenge.
+  const [partners, setPartners] = useState<Record<string, string | null>>({});
+  const { options: partnerOptions, reload: reloadPartners } = usePeopleOptions();
+  // Edits and deletes of played games that are waiting on you.
+  const [changes, setChanges] = useState<PendingChangeRow[]>([]);
 
   // Opened from a player's page with a tab to show.
   useEffect(() => {
@@ -47,7 +58,9 @@ export default function ChallengesScreen() {
     useCallback(() => {
       refreshChallenges(demoMode);
       fetchMyTeams(demoMode).then(setMyTeams);
-    }, [demoMode]),
+      fetchPendingChanges(demoMode).then(setChanges);
+      reloadPartners();
+    }, [demoMode, reloadPartners]),
   );
 
   const all = rows ?? [];
@@ -81,6 +94,15 @@ export default function ChallengesScreen() {
   };
 
   const accept = async (r: ChallengeRow) => {
+    if (r.needs_partner) {
+      const partner = partners[r.challenge_id];
+      if (!partner) return Alert.alert('Pick your partner', 'This is a doubles game. Choose who you will play with first.');
+      if (await act(r.challenge_id, () => acceptWithPartner(demoMode, r.challenge_id, partner))) {
+        const name = partnerOptions?.find((o) => o.id === partner)?.name;
+        setAccepted({ ...r, my_team_name: `${(profile?.display_name ?? 'You').split(' ')[0]} + ${(name ?? 'partner').split(' ')[0]}` });
+      }
+      return;
+    }
     const team = isDoubles(r) ? (picks[r.challenge_id] ?? r.my_team_id) : null;
     if (await act(r.challenge_id, () => respondToChallenge(demoMode, r.challenge_id, true, team))) {
       const chosen = myTeams.find((t) => t.team_id === team);
@@ -134,6 +156,33 @@ export default function ChallengesScreen() {
         </Link>
       ))}
 
+      {changes.map((c) => (
+        <Link key={c.change_id} href={{ pathname: '/game/[id]', params: { id: c.challenge_id } }} asChild>
+          <Pressable
+            accessibilityRole="link"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.accentText, backgroundColor: colors.surface }}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Body weight="semibold">{c.kind === 'delete' ? `${c.by_name} wants to delete a game` : `${c.by_name} changed a game`}</Body>
+              <Body size={13} tone="muted">
+                {c.by_team_name} at {c.court_name}
+              </Body>
+            </View>
+            <Body weight="bold" size={14} tone="accent">
+              Review
+            </Body>
+          </Pressable>
+        </Link>
+      ))}
+
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Link href="/challenge/player" asChild>
+          <Button label="Challenge a player" style={{ flex: 1 }} />
+        </Link>
+        <Link href="/log-game" asChild>
+          <Button label="Log a game" variant="outline" style={{ flex: 1 }} />
+        </Link>
+      </View>
+
       <Segmented
         value={tab}
         onChange={setTab}
@@ -157,6 +206,11 @@ export default function ChallengesScreen() {
                 <Heading size={14} style={{ letterSpacing: 1 }}>
                   YOU&apos;VE BEEN CHALLENGED
                 </Heading>
+                {r.needs_partner ? (
+                  <Body size={13} tone="muted">
+                    Doubles. Pick your partner to accept and your team gets made.
+                  </Body>
+                ) : null}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <View style={{ flex: 1 }}>
                     <Heading size={18}>{r.their_team_name}</Heading>
@@ -183,6 +237,16 @@ export default function ChallengesScreen() {
                 <Body size={14} tone="subtle">
                   {r.court_name} · {formatWhen(r.proposed_time)} · Ranked, {matchLengthLabel(bestOfOf(r)).toLowerCase()}
                 </Body>
+                {r.needs_partner ? (
+                  <PersonPicker
+                    label="Who is your partner?"
+                    value={partners[r.challenge_id] ?? null}
+                    onChange={(id) => setPartners((p) => ({ ...p, [r.challenge_id]: id }))}
+                    options={partnerOptions}
+                    onCreated={reloadPartners}
+                    exclude={[]}
+                  />
+                ) : null}
                 {isDoubles(r) && myDoubles.length > 1 ? (
                   <View style={{ gap: 8 }}>
                     <Body size={13} weight="semibold" tone="muted">
@@ -222,7 +286,7 @@ export default function ChallengesScreen() {
 
       {tab === 'sent' && rows ? (
         <>
-          {sent.length === 0 ? empty('Nothing sent. Challenge someone from their profile.') : null}
+          {sent.length === 0 ? empty('Nothing sent. Tap Challenge a player above.') : null}
           {sent.map((r) => (
             <Card key={r.challenge_id} style={{ padding: 16, gap: 8 }}>
               <VsLine you={r.my_team_name} them={r.their_team_name} />
@@ -285,7 +349,7 @@ export default function ChallengesScreen() {
         <>
           {played.length === 0 ? empty('No matches yet.') : null}
           {playedPaged.shown.map((r) => (
-            <Link key={r.challenge_id} href={{ pathname: '/match/[id]', params: { id: r.challenge_id } }} asChild>
+            <Link key={r.challenge_id} href={{ pathname: r.match_status === 'confirmed' || r.match_status === 'unconfirmed' ? '/game/[id]' : '/match/[id]', params: { id: r.challenge_id } }} asChild>
               <Pressable accessibilityRole="link">
                 <Card style={{ padding: 16, gap: 4 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -299,7 +363,7 @@ export default function ChallengesScreen() {
                     ) : null}
                   </View>
                   <Body size={13} tone="muted">
-                    {[formatScores(r.games ?? []), r.court_name, matchStatusText(r)].filter(Boolean).join(' · ')}
+                    {[formatScores(r.games ?? []), r.court_name, r.logged ? 'Logged' : null, matchStatusText(r)].filter(Boolean).join(' · ')}
                   </Body>
                   {r.match_status === 'confirmed' ? (
                     <Body size={13} weight="semibold" tone="accent">

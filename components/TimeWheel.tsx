@@ -98,25 +98,30 @@ export function TimeWheel({
   mode = 'datetime',
   maxDays = 30,
   allowPast = false,
+  daysBack = 0,
 }: {
   value: Date;
   onChange: (d: Date) => void;
   mode?: 'datetime' | 'time';
   maxDays?: number;
   allowPast?: boolean;
+  // How many days before today can be picked (for logging games that already happened).
+  daysBack?: number;
 }) {
   const { colors } = useTheme();
   const withDay = mode === 'datetime';
   const days = useMemo(() => {
     const first = new Date();
     first.setHours(0, 0, 0, 0);
-    return Array.from({ length: maxDays }, (_, i) => {
+    first.setDate(first.getDate() - daysBack);
+    return Array.from({ length: maxDays + daysBack }, (_, i) => {
       const d = new Date(first);
       d.setDate(first.getDate() + i);
-      const label = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      const rel = i - daysBack;
+      const label = rel === 0 ? 'Today' : rel === 1 ? 'Tomorrow' : rel === -1 ? 'Yesterday' : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
       return { label, date: d };
     });
-  }, [maxDays]);
+  }, [maxDays, daysBack]);
 
   const dayIndex = withDay ? Math.max(0, Math.min(days.length - 1, Math.round((new Date(value).setHours(0, 0, 0, 0) - days[0].date.getTime()) / 86_400_000))) : 0;
   const h24 = value.getHours();
@@ -172,6 +177,7 @@ export function TimeField({
   mode = 'datetime',
   maxDays,
   allowPast,
+  daysBack,
   action = 'Change',
   onClear,
 }: {
@@ -182,6 +188,7 @@ export function TimeField({
   mode?: 'datetime' | 'time';
   maxDays?: number;
   allowPast?: boolean;
+  daysBack?: number;
   action?: string;
   // Adds a Remove button to the sheet, for a time that can be taken away.
   onClear?: () => void;
@@ -225,7 +232,7 @@ export function TimeField({
             <Body weight="bold" size={17} style={{ textAlign: 'center' }}>
               {title}
             </Body>
-            <TimeWheel value={draft} onChange={setDraft} mode={mode} maxDays={maxDays} allowPast={allowPast} />
+            <TimeWheel value={draft} onChange={setDraft} mode={mode} maxDays={maxDays} allowPast={allowPast} daysBack={daysBack} />
             {onClear ? (
               <Button
                 label="Remove"

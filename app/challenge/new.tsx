@@ -12,13 +12,23 @@ import { courtsNear, useCourts, widerMiles } from '@/lib/courts';
 import { formatMiles } from '@/lib/format';
 import { getCurrentLocation, getLocationIfAllowed, LatLng } from '@/lib/location';
 import { useProfile } from '@/lib/profile';
-import { fetchMyTeams, fetchTeamDetail, sendChallenge, TeamRow, useTeamPlayers } from '@/lib/matches';
+import { fetchMyTeams, fetchTeamDetail, sendChallenge, sendChallengeToPlayer, TeamRow, useTeamPlayers } from '@/lib/matches';
 import { fetchPreferredTimesFor, hasPreferred, nextWindows, preferredText, PreferredTimes } from '@/lib/preferred';
 import { BestOf, matchLengthLabel } from '@/lib/scores';
 
 // Challenge a team: pick which of your teams plays, where, and when.
 export default function NewChallengeScreen() {
-  const { team, teamName, court, myTeam: myTeamParam, bestOf: bestOfParam } = useLocalSearchParams<{ team: string; teamName?: string; court?: string; myTeam?: string; bestOf?: string }>();
+  const { team, teamName, court, myTeam: myTeamParam, bestOf: bestOfParam, player, needsPartner } = useLocalSearchParams<{
+    team: string;
+    teamName?: string;
+    court?: string;
+    myTeam?: string;
+    bestOf?: string;
+    // A doubles challenge to one player with no team: they pick a partner when they accept.
+    player?: string;
+    needsPartner?: string;
+  }>();
+  const toPlayer = needsPartner === '1' && Boolean(player);
   const { demoMode } = useAuth();
   const { profile } = useProfile();
   const { courts } = useCourts();
@@ -62,12 +72,13 @@ export default function NewChallengeScreen() {
 
   useEffect(() => {
     fetchTeamDetail(demoMode, team).then(async (d) => {
-      setSingles(Boolean(d?.is_singles));
+      // A player with no doubles team is reached through their singles team, but the game is doubles.
+      setSingles(toPlayer ? false : Boolean(d?.is_singles));
       const others = (d?.members ?? []).filter((m) => m.id !== profile?.id);
       const found = await fetchPreferredTimesFor(demoMode, others.map((m) => m.id));
       setTheirPrefs(others.map((m) => ({ name: m.name.split(' ')[0], prefs: found[m.id] })).filter((x) => hasPreferred(x.prefs)));
     });
-  }, [demoMode, team, profile?.id]);
+  }, [demoMode, team, profile?.id, toPlayer]);
 
   useEffect(() => {
     fetchMyTeams(demoMode).then(setTeams);
@@ -81,7 +92,7 @@ export default function NewChallengeScreen() {
     if (playable && playable.length === 1) setMyTeam(playable[0].team_id);
   }, [playable]);
 
-  const players = useTeamPlayers(demoMode, [{ team_id: team }, ...(playable ?? [])]);
+  const players = useTeamPlayers(demoMode, [...(toPlayer ? [] : [{ team_id: team }]), ...(playable ?? [])]);
   const myChosen = (playable ?? []).find((t) => t.team_id === myTeam);
 
   const inPast = when.getTime() < Date.now();
@@ -91,7 +102,8 @@ export default function NewChallengeScreen() {
     if (!ready) return;
     setBusy(true);
     try {
-      await sendChallenge(demoMode, myTeam, team, courtId, when, bestOf);
+      if (toPlayer && player) await sendChallengeToPlayer(demoMode, myTeam, player, courtId, when, bestOf);
+      else await sendChallenge(demoMode, myTeam, team, courtId, when, bestOf);
       Alert.alert('Challenge sent', `${teamName || 'They'} can accept or decline. Track it under Challenges.`);
       router.back();
     } catch (e) {
@@ -125,7 +137,7 @@ export default function NewChallengeScreen() {
       <Body tone="muted">Ranked. Counts once both sides confirm the score.</Body>
 
       <Card style={{ padding: 14 }}>
-        <VsLine you={singles ? 'You' : (myChosen?.team_name ?? 'Your team')} them={teamName || 'This team'} size={22} />
+        <VsLine you={singles ? 'You' : (myChosen?.team_name ?? 'Your team')} them={toPlayer ? `${teamName || 'They'} + partner` : teamName || 'This team'} size={22} />
       </Card>
 
       <View style={{ gap: 8 }}>

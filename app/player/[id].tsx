@@ -232,7 +232,11 @@ export default function PlayerScreen() {
           </Card>
         ) : (
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Stat value={`${stats.wins ?? 0}–${stats.losses ?? 0}`} label="Record" />
+            <Link href={{ pathname: '/history/[id]', params: { id: player.id } }} asChild>
+              <Pressable accessibilityRole="link" accessibilityLabel="Record. Open match history" style={{ flex: 1 }}>
+                <Stat value={`${stats.wins ?? 0}–${stats.losses ?? 0}`} label="Record · history" />
+              </Pressable>
+            </Link>
             <Stat
               value={(stats.wins ?? 0) + (stats.losses ?? 0) > 0 ? `${Math.round(((stats.wins ?? 0) / ((stats.wins ?? 0) + (stats.losses ?? 0))) * 100)}%` : '–'}
               label="Win rate"

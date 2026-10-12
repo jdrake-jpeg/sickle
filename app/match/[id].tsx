@@ -173,6 +173,12 @@ export default function MatchScreen() {
         </View>
       ) : null}
 
+      {row.match_status === 'confirmed' || row.match_status === 'unconfirmed' ? (
+        <Link href={{ pathname: '/game/[id]', params: { id: row.challenge_id } }} asChild>
+          <Button label="Details, edit or delete" variant="outline" />
+        </Link>
+      ) : null}
+
       {row.match_status === 'confirmed' ? <RatePlayers demoMode={demoMode} matchId={row.match_id} /> : null}
     </Screen>
   );

@@ -33,6 +33,10 @@ export type ChallengeRow = {
   // One game or best of 3. Missing on a database from before update 20261010,
   // which only had best of 3.
   best_of?: BestOf;
+  // A doubles challenge to a player with no team yet: they pick a partner to accept.
+  needs_partner?: boolean;
+  // A game that was logged after it happened, with no challenge.
+  logged?: boolean;
 };
 
 export const bestOfOf = (row: Pick<ChallengeRow, 'best_of'>): BestOf => (row.best_of === 1 ? 1 : 3);
@@ -192,6 +196,23 @@ export async function disputeResult(demoMode: boolean, row: ChallengeRow, mine: 
   return (await call('dispute_match_result', { p_match: row.match_id, p_games: toDbOrder(row, mine), p_note: note.trim() || null })) as MatchStatus;
 }
 
+// Doubles challenge to one player who has no team: they name a partner when they accept.
+export async function sendChallengeToPlayer(demoMode: boolean, myTeam: string, playerId: string, court: string, when: Date, bestOf: BestOf = 3) {
+  if (demoMode || !supabase) return;
+  await call('send_challenge_to_player', {
+    p_my_team: myTeam,
+    p_player: playerId,
+    p_court: court,
+    p_time: when.toISOString(),
+    ...(bestOf === 1 ? { p_best_of: 1 } : {}),
+  });
+}
+
+export async function acceptWithPartner(demoMode: boolean, id: string, partnerId: string) {
+  if (demoMode || !supabase) return demoUpdate(id, { status: 'accepted', needs_partner: false });
+  await call('accept_challenge_with_partner', { p_challenge: id, p_partner: partnerId });
+}
+
 export async function sendChallenge(demoMode: boolean, myTeam: string, theirTeam: string, court: string, when: Date, bestOf: BestOf = 3) {
   if (demoMode || !supabase) return;
   await call('send_challenge', {
@@ -337,6 +358,148 @@ export async function deleteTeam(demoMode: boolean, teamId: string): Promise<voi
   if (demoMode || !supabase) return;
   const { error } = await supabase.rpc('delete_team', { p_team: teamId });
   if (error) throw new Error(error.code === 'PGRST202' ? missingUpdate : error.message);
+}
+
+// ---------------------------------------------------------------------------
+// People you add by name, logged games, and editing played games
+// ---------------------------------------------------------------------------
+
+export type PersonRow = { profile_id: string; display_name: string; wins: number; losses: number };
+
+const demoPeople: PersonRow[] = [{ profile_id: 'ghost1', display_name: 'Walk On Wes', wins: 0, losses: 1 }];
+
+export async function fetchMyPeople(demoMode: boolean): Promise<PersonRow[]> {
+  if (demoMode || !supabase) return demoPeople;
+  const { data } = await supabase.rpc('my_people');
+  return (data ?? []) as PersonRow[];
+}
+
+const missingRound9 = "This isn't in the database yet. Run the newest files from supabase/migrations in the Supabase SQL Editor.";
+
+async function rpcOrThrow<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
+  const { data, error } = await supabase!.rpc(fn, args);
+  if (error) throw new Error(error.code === 'PGRST202' ? missingRound9 : error.message);
+  return data as T;
+}
+
+export async function createPerson(demoMode: boolean, name: string): Promise<string> {
+  if (demoMode || !supabase) return 'ghost-' + name;
+  return rpcOrThrow<string>('create_person', { p_name: name });
+}
+
+export async function renamePerson(demoMode: boolean, id: string, name: string) {
+  if (demoMode || !supabase) return;
+  await rpcOrThrow('rename_person', { p_person: id, p_name: name });
+}
+
+export async function deletePerson(demoMode: boolean, id: string) {
+  if (demoMode || !supabase) return;
+  await rpcOrThrow('delete_person', { p_person: id });
+}
+
+// Returns how many games moved onto the account.
+export async function linkPerson(demoMode: boolean, personId: string, accountId: string): Promise<number> {
+  if (demoMode || !supabase) return 0;
+  const n = await rpcOrThrow<number>('link_person_to_account', { p_person: personId, p_account: accountId });
+  await refreshChallenges(false);
+  return n;
+}
+
+// Scores are [your team, their team]. Singles: leave partner and opponent2 out.
+export async function logGame(
+  demoMode: boolean,
+  g: { court: string; playedAt: Date; bestOf: BestOf; games: GameScore[]; partner?: string | null; opponent1: string; opponent2?: string | null },
+): Promise<string> {
+  if (demoMode || !supabase) return 'demo-logged';
+  const id = await rpcOrThrow<string>('log_game', {
+    p_court: g.court,
+    p_played_at: g.playedAt.toISOString(),
+    p_best_of: g.bestOf,
+    p_games: g.games,
+    p_partner: g.partner ?? null,
+    p_opp1: g.opponent1,
+    p_opp2: g.opponent2 ?? null,
+  });
+  await refreshChallenges(false);
+  return id;
+}
+
+export type DetailTeam = { id: string; name: string; players: { id: string; name: string; placeholder: boolean }[] };
+export type PendingChange = {
+  id: string;
+  kind: 'edit' | 'delete';
+  games: GameScore[] | null;
+  court_id: string | null;
+  court_name: string | null;
+  played_at: string | null;
+  by_name: string;
+  by_side: 'a' | 'b';
+};
+// Everything about one played match. Scores are team A first.
+export type MatchDetail = {
+  challenge_id: string;
+  match_id: string;
+  status: MatchStatus;
+  logged: boolean;
+  best_of: BestOf;
+  scheduled_for: string;
+  played_at: string;
+  court_id: string;
+  court_name: string;
+  team_a: DetailTeam;
+  team_b: DetailTeam;
+  games: GameScore[];
+  winner: 'a' | 'b';
+  my_side: 'a' | 'b' | null;
+  awaiting_side: 'a' | 'b' | null;
+  submitted_by_name: string | null;
+  pending_change: PendingChange | null;
+};
+
+export async function fetchMatchDetail(demoMode: boolean, challengeId: string): Promise<MatchDetail | null> {
+  if (demoMode || !supabase) return null;
+  const { data, error } = await supabase.rpc('match_detail', { p_challenge: challengeId });
+  if (error) return null;
+  return (data ?? null) as MatchDetail | null;
+}
+
+// Returns 'applied' (it happened) or 'pending' (the other side has to agree).
+export async function proposeMatchChange(
+  demoMode: boolean,
+  matchId: string,
+  kind: 'edit' | 'delete',
+  edit?: { games?: GameScore[]; court?: string; playedAt?: Date },
+): Promise<'applied' | 'pending'> {
+  if (demoMode || !supabase) return 'applied';
+  const r = await rpcOrThrow<'applied' | 'pending'>('propose_match_change', {
+    p_match: matchId,
+    p_kind: kind,
+    ...(edit?.games ? { p_games: edit.games } : {}),
+    ...(edit?.court ? { p_court: edit.court } : {}),
+    ...(edit?.playedAt ? { p_played_at: edit.playedAt.toISOString() } : {}),
+  });
+  await refreshChallenges(false);
+  return r;
+}
+
+export async function respondToMatchChange(demoMode: boolean, changeId: string, accept: boolean) {
+  if (demoMode || !supabase) return;
+  await rpcOrThrow('respond_to_match_change', { p_change: changeId, p_accept: accept });
+  await refreshChallenges(false);
+}
+
+export async function cancelMatchChange(demoMode: boolean, changeId: string) {
+  if (demoMode || !supabase) return;
+  await rpcOrThrow('cancel_match_change', { p_change: changeId });
+}
+
+export type PendingChangeRow = { challenge_id: string; change_id: string; kind: 'edit' | 'delete'; by_name: string; by_team_name: string; court_name: string; created_at: string };
+
+export async function fetchPendingChanges(demoMode: boolean): Promise<PendingChangeRow[]> {
+  if (demoMode || !supabase) return [];
+  const { data, error } = await supabase.rpc('my_pending_changes');
+  if (error) return [];
+  return (data ?? []) as PendingChangeRow[];
 }
 
 // ---------------------------------------------------------------------------

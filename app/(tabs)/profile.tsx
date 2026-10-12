@@ -87,7 +87,11 @@ export default function ProfileScreen() {
 
       <View style={{ gap: 10 }}>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Stat value={`${wins}–${losses}`} label="Record" />
+          <Link href={{ pathname: '/history/[id]', params: { id: profile?.id ?? '' } }} asChild>
+            <Pressable accessibilityRole="link" accessibilityLabel="Record. Open match history" style={{ flex: 1 }}>
+              <Stat value={`${wins}–${losses}`} label="Record · history" />
+            </Pressable>
+          </Link>
           <Stat value={confirmed.length ? `${Math.round((wins / confirmed.length) * 100)}%` : '–'} label="Win rate" />
           <Stat value={String(opponents)} label="Opponents" />
         </View>
@@ -185,7 +189,7 @@ export default function ProfileScreen() {
           const done = match.match_status === 'confirmed';
           const won = Boolean(match.i_won);
           return (
-            <Link key={match.challenge_id} href={{ pathname: '/match/[id]', params: { id: match.challenge_id } }} asChild>
+            <Link key={match.challenge_id} href={{ pathname: done || match.match_status === 'unconfirmed' ? '/game/[id]' : '/match/[id]', params: { id: match.challenge_id } }} asChild>
               <Pressable accessibilityRole="link">
                 <ListRow
                   left={
@@ -218,6 +222,12 @@ export default function ProfileScreen() {
         <ShowMore hasMore={paged.hasMore} remaining={paged.remaining} onPress={paged.more} />
       </View>
 
+      <Link href="/log-game" asChild>
+        <Button label="Log a game I already played" variant="outline" />
+      </Link>
+      <Link href="/people" asChild>
+        <Button label="People I added by name" variant="ghost" size="sm" />
+      </Link>
       <Link href="/rules" asChild>
         <Button label="Pickleball rules" variant="outline" />
       </Link>

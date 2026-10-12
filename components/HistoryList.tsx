@@ -11,7 +11,7 @@ import { formatScores } from '@/lib/scores';
 import { useTheme } from '@/lib/theme';
 
 // Confirmed matches: won or lost, the score, who they played against and
-// where. Tap the court to open it. In a player's history it also says who they
+// where. Tap a match for the full details, or the court to open it. In a player's history it also says who they
 // teamed up with. Filter by singles or doubles and by same or different teams.
 export function HistoryList({ rows, empty }: { rows: HistoryRow[] | null; empty: string }) {
   const { colors } = useTheme();
@@ -38,7 +38,9 @@ export function HistoryList({ rows, empty }: { rows: HistoryRow[] | null; empty:
         </Card>
       ) : null}
       {paged.shown.map((r) => (
-        <Card key={r.challenge_id} style={{ padding: 14, gap: 6 }}>
+        <Link key={r.challenge_id} href={{ pathname: '/game/[id]', params: { id: r.challenge_id } }} asChild>
+          <Pressable accessibilityRole="link">
+        <Card style={{ padding: 14, gap: 6 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View
               style={{
@@ -71,7 +73,12 @@ export function HistoryList({ rows, empty }: { rows: HistoryRow[] | null; empty:
               </Body>
             </Pressable>
           </Link>
+          <Body size={12} tone="subtle">
+            Tap for details
+          </Body>
         </Card>
+          </Pressable>
+        </Link>
       ))}
       <ShowMore hasMore={paged.hasMore} remaining={paged.remaining} onPress={paged.more} />
     </View>

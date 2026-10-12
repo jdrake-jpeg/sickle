@@ -45,9 +45,10 @@ insert into ids select 't', public.create_team('00000000-0000-0000-0000-00000000
 do $$ begin
   assert (select players from public.team_players(array[(select v from ids where k = 't')])) = 'Zed One and Zed Two', 'players under the name';
 end $$;
--- Round 3: no second team with the same person, and names are permanent.
+-- Round 3: no second team with the same person, and usernames are permanent.
 select pg_temp.expect_error($$select public.create_team('00000000-0000-0000-0000-00000000cc02', 'Again')$$, 'You already have a team with Zed');
-select pg_temp.expect_error($$update public.profiles set display_name = 'New Name' where id = auth.uid()$$, 'permission denied');
+-- (Round 9 lets people edit their name again; the username stays locked.)
+update public.profiles set display_name = display_name where id = auth.uid();
 select pg_temp.expect_error($$update public.profiles set username = 'newname' where id = auth.uid()$$, 'permission denied');
 update public.profiles set skill_level = 3.5 where id = auth.uid();
 

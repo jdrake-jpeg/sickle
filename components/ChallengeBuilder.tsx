@@ -50,10 +50,16 @@ export function ChallengeBuilder({ playerId, firstName, blocked, blockedNote }: 
       router.push({ pathname: '/challenge/new', params: { team: theirSingles.team_id, teamName: firstName, bestOf: String(bestOf) } });
     } else if (myTeam && theirTeam) {
       router.push({ pathname: '/challenge/new', params: { team: theirTeam.team_id, teamName: firstName, myTeam: myTeam.team_id, bestOf: String(bestOf) } });
+    } else if (myTeam && theirSingles) {
+      // They have no doubles team yet: the challenge goes to them and they pick a partner when they accept.
+      router.push({
+        pathname: '/challenge/new',
+        params: { team: theirSingles.team_id, teamName: firstName, myTeam: myTeam.team_id, bestOf: String(bestOf), player: playerId, needsPartner: '1' },
+      });
     }
   };
 
-  const ready = kind === 'singles' ? Boolean(theirSingles) : Boolean(myTeam && theirTeam);
+  const ready = kind === 'singles' ? Boolean(theirSingles) : Boolean(myTeam && (theirTeam || theirSingles));
 
   return (
     <Card style={{ padding: 16, gap: 14 }} highlighted>
@@ -94,8 +100,6 @@ export function ChallengeBuilder({ playerId, firstName, blocked, blockedNote }: 
               <Body tone="muted">Doubles needs a team. Make one with a friend first.</Body>
               <Button label="Make a team" variant="outline" onPress={() => router.push('/team/new')} />
             </View>
-          ) : theirDoubles.length === 0 ? (
-            <Body tone="muted">{firstName} has no doubles team yet. Try singles.</Body>
           ) : (
             <View style={{ gap: 8 }}>
               <Body size={13} weight="semibold" tone="muted">
@@ -105,7 +109,7 @@ export function ChallengeBuilder({ playerId, firstName, blocked, blockedNote }: 
                 <TeamPick key={t.team_id} name={t.team_name} players={players[t.team_id]} selected={myPick === t.team_id} onPress={() => setMyPick(t.team_id)} />
               ))}
               <Body size={13} tone="muted">
-                {firstName} picks their team when they accept.
+                {theirDoubles.length === 0 ? `${firstName} picks a partner when they accept.` : `${firstName} picks their team when they accept.`}
               </Body>
             </View>
           )}

@@ -67,11 +67,11 @@ export function ScoreEntry({
       {value.map(([a, b], i) => (
         <View key={i} style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Body size={13} tone="muted" style={{ width: 64 }}>
-            Game {i + 1}
-            {i === 2 ? '\nif needed' : ''}
+            {value.length === 1 ? 'Final score' : `Game ${i + 1}`}
+            {value.length > 1 && i === 2 ? '\nif needed' : ''}
           </Body>
           <TextInput
-            accessibilityLabel={`Game ${i + 1}, ${teamA} score`}
+            accessibilityLabel={`${value.length === 1 ? 'Final' : `Game ${i + 1}`}, ${teamA} score`}
             keyboardType="number-pad"
             value={a}
             onChangeText={(t) => set(i, 0, t)}
@@ -81,7 +81,7 @@ export function ScoreEntry({
             –
           </Body>
           <TextInput
-            accessibilityLabel={`Game ${i + 1}, ${teamB} score`}
+            accessibilityLabel={`${value.length === 1 ? 'Final' : `Game ${i + 1}`}, ${teamB} score`}
             keyboardType="number-pad"
             value={b}
             onChangeText={(t) => set(i, 1, t)}

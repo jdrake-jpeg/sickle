@@ -1,3 +1,4 @@
+import { SymbolView } from 'expo-symbols';
 import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
@@ -124,15 +125,16 @@ export default function ProfileScreen() {
         <Link href="/chats" asChild>
           <Pressable accessibilityRole="link" style={{ flex: 1 }}>
             <Card style={{ padding: 12, gap: 2 }} highlighted={unread > 0}>
-              <Heading size={22} tone={unread > 0 ? 'danger' : 'default'}>
-                {unread}
-              </Heading>
+              {/* A person icon that opens chats; the number only shows when something is new. */}
+              <View style={{ height: 28, justifyContent: 'center' }}>
+                <SymbolView name="person.2.fill" tintColor={unread > 0 ? colors.danger : colors.text} size={24} />
+              </View>
               <Body size={13} weight="semibold">
                 Chats
               </Body>
               {unread > 0 ? (
                 <Body size={12} tone="danger">
-                  new
+                  {unread} new
                 </Body>
               ) : null}
             </Card>

@@ -20,9 +20,9 @@ const emptyDraft = (): DraftScores => [
   ['', ''],
 ];
 
-// Log a game that already happened, with no challenge. Players who aren't on
-// the app can be added by name. If everyone on the other side was added by
-// name it counts right away; otherwise the real players on that side confirm it.
+// Log a game that already happened, with no challenge. It counts right away.
+// Players who aren't on the app can be added by name, and everyone who played
+// can fix the score later.
 export default function LogGameScreen() {
   const { demoMode } = useAuth();
   const { profile } = useProfile();
@@ -43,12 +43,19 @@ export default function LogGameScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [here, setHere] = useState<LatLng | null>(null);
+  const [moreCourts, setMoreCourts] = useState(false);
+  // Names of people found by search, who aren't in the dropdown lists.
+  const [known, setKnown] = useState<Record<string, string>>({});
+  const pick = (set: (id: string | null) => void) => (id: string | null, name?: string) => {
+    set(id);
+    if (id && name) setKnown((k) => ({ ...k, [id]: name }));
+  };
 
   useEffect(() => {
     getLocationIfAllowed().then(setHere);
   }, []);
 
-  const nearby = courtsNear(here, courts ?? []).slice(0, 8);
+  const nearby = courtsNear(here, courts ?? []);
   useEffect(() => {
     if (!courtId && nearby.length > 0) setCourtId(nearby[0].id);
     // nearby is rebuilt every render; where you are decides it.
@@ -56,11 +63,13 @@ export default function LogGameScreen() {
   }, [courtId, here, courts]);
 
   const doubles = kind === 'doubles';
-  const names = new Map((options ?? []).map((o) => [o.id, o.name]));
+  const names = new Map<string, string>([...(options ?? []).map((o) => [o.id, o.name] as [string, string]), ...Object.entries(known)]);
   const first = (id: string | null) => (id ? (names.get(id) ?? 'Them').split(' ')[0] : null);
   const myName = (profile?.display_name ?? 'You').split(' ')[0];
   const teamA = doubles ? `${myName} + ${first(partner) ?? '?'}` : myName;
   const teamB = doubles ? `${first(opp1) ?? '?'} + ${first(opp2) ?? '?'}` : (first(opp1) ?? 'Opponent');
+
+  const ready = Boolean(opp1 && courtId && (!doubles || (partner && opp2)));
 
   const submit = async () => {
     const games = toGameScores(draft.slice(0, bestOf));
@@ -72,7 +81,7 @@ export default function LogGameScreen() {
     setBusy(true);
     try {
       await logGame(demoMode, { court: courtId, playedAt: when, bestOf, games, partner: doubles ? partner : null, opponent1: opp1, opponent2: doubles ? opp2 : null });
-      Alert.alert('Game logged', 'If a real player was on the other side, they will be asked to confirm it.');
+      Alert.alert('Game logged', 'It counts right away. Anyone who played can fix the score later.');
       router.back();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Try again.');
@@ -85,7 +94,7 @@ export default function LogGameScreen() {
     <Screen>
       <Card style={{ padding: 14 }}>
         <Body size={14} tone="subtle">
-          Log a game you already played. Someone not on the app? Add them by name. If you later see them on the app, link their name to their account.
+          Log a game you already played. It counts right away, and everyone who played can edit the score later. Someone not on the app? Add them by name.
         </Body>
       </Card>
 
@@ -113,16 +122,16 @@ export default function LogGameScreen() {
         </View>
       </View>
 
-      {doubles ? <PersonPicker label="Your partner" value={partner} onChange={setPartner} options={options} onCreated={reload} exclude={[opp1, opp2]} /> : null}
-      <PersonPicker label={doubles ? 'First opponent' : 'Who you played'} value={opp1} onChange={setOpp1} options={options} onCreated={reload} exclude={[partner, opp2]} />
-      {doubles ? <PersonPicker label="Second opponent" value={opp2} onChange={setOpp2} options={options} onCreated={reload} exclude={[partner, opp1]} /> : null}
+      {doubles ? <PersonPicker label="Your partner" value={partner} onChange={pick(setPartner)} options={options} onCreated={reload} exclude={[opp1, opp2]} /> : null}
+      <PersonPicker label={doubles ? 'First opponent' : 'Who you played'} value={opp1} onChange={pick(setOpp1)} options={options} onCreated={reload} exclude={[partner, opp2]} />
+      {doubles ? <PersonPicker label="Second opponent" value={opp2} onChange={pick(setOpp2)} options={options} onCreated={reload} exclude={[partner, opp1]} /> : null}
 
       <ScoreEntry teamA={teamA} teamB={teamB} value={draft.slice(0, bestOf)} onChange={(next) => setDraft([...next, ...draft.slice(next.length)])} />
 
       <View style={{ gap: 8 }}>
         <Body weight="semibold">Where did you play?</Body>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {nearby.map((c) => (
+          {(moreCourts ? nearby : nearby.slice(0, 3)).map((c) => (
             <Chip
               key={c.id}
               label={c.miles !== null ? `${c.name} · ${formatMiles(Math.round(c.miles * 10) / 10)}` : c.name}
@@ -131,6 +140,7 @@ export default function LogGameScreen() {
             />
           ))}
         </View>
+        {!moreCourts && nearby.length > 3 ? <Button label={`See more (${nearby.length - 3})`} variant="outline" size="sm" style={{ alignSelf: 'flex-start' }} onPress={() => setMoreCourts(true)} /> : null}
         <Link href="/court/new" asChild>
           <Button label="Court not listed? Add it" variant="ghost" size="sm" style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
         </Link>
@@ -146,7 +156,12 @@ export default function LogGameScreen() {
           {error}
         </Body>
       ) : null}
-      <Button label={busy ? 'Saving…' : 'Log game'} size="lg" disabled={busy} onPress={submit} />
+      <Button label={busy ? 'Saving…' : 'Log game'} size="lg" disabled={busy || !ready} onPress={submit} />
+      {!ready ? (
+        <Body size={13} tone="muted" style={{ textAlign: 'center' }}>
+          {doubles ? 'Pick your partner, both opponents and the court to finish.' : 'Pick who you played and the court to finish.'}
+        </Body>
+      ) : null}
       <Link href="/people" asChild>
         <Button label="Manage people I added" variant="ghost" />
       </Link>

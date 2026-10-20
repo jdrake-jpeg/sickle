@@ -52,7 +52,18 @@ function Column({
     }
   }, [index]);
 
+  // A drag that ends with no momentum (scrolling right up to the first or last row)
+  // never fires onMomentumScrollEnd, so that case is caught here after a short wait.
+  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (settle.current) clearTimeout(settle.current);
+    },
+    [],
+  );
+
   const landed = (y: number) => {
+    if (settle.current) clearTimeout(settle.current);
     at.current = y;
     const i = Math.max(0, Math.min(items.length - 1, Math.round(y / ITEM)));
     if (i !== index) onSelect(i);
@@ -69,6 +80,17 @@ function Column({
       bounces={false}
       overScrollMode="never"
       contentOffset={{ x: 0, y: index * ITEM }}
+      onScrollBeginDrag={() => {
+        if (settle.current) clearTimeout(settle.current);
+      }}
+      onScrollEndDrag={(e) => {
+        const y = e.nativeEvent.contentOffset.y;
+        if (settle.current) clearTimeout(settle.current);
+        settle.current = setTimeout(() => landed(y), 120);
+      }}
+      onMomentumScrollBegin={() => {
+        if (settle.current) clearTimeout(settle.current);
+      }}
       onMomentumScrollEnd={(e) => landed(e.nativeEvent.contentOffset.y)}>
       {items.map((label, i) => (
         <Pressable

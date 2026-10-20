@@ -1,5 +1,6 @@
 import { ReactNode, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -213,7 +214,7 @@ export function Segmented<T extends string>({
   );
 }
 
-export function Avatar({ initials, size = 42 }: { initials: string; size?: number }) {
+export function Avatar({ initials, size = 42, uri }: { initials: string; size?: number; uri?: string | null }) {
   const { colors } = useTheme();
   return (
     <View
@@ -226,10 +227,15 @@ export function Avatar({ initials, size = 42 }: { initials: string; size?: numbe
         borderColor: colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
       }}>
-      <Body weight="bold" size={size * 0.34}>
-        {initials}
-      </Body>
+      {uri ? (
+        <Image accessibilityIgnoresInvertColors source={{ uri }} style={{ width: size, height: size }} />
+      ) : (
+        <Body weight="bold" size={size * 0.34}>
+          {initials}
+        </Body>
+      )}
     </View>
   );
 }

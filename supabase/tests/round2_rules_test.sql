@@ -49,7 +49,9 @@ end $$;
 select pg_temp.expect_error($$select public.create_team('00000000-0000-0000-0000-00000000cc02', 'Again')$$, 'You already have a team with Zed');
 -- (Round 9 lets people edit their name again; the username stays locked.)
 update public.profiles set display_name = display_name where id = auth.uid();
-select pg_temp.expect_error($$update public.profiles set username = 'newname' where id = auth.uid()$$, 'permission denied');
+-- (Round 10 lets people change their username too; it stays unique.)
+update public.profiles set username = 'newname' where id = auth.uid();
+select pg_temp.expect_error($$update public.profiles set username = 'bad name!' where id = auth.uid()$$, 'new row for relation "profiles" violates check constraint "profiles_username_check"');
 update public.profiles set skill_level = 3.5 where id = auth.uid();
 
 select pg_temp.expect_error($$select public.create_team('00000000-0000-0000-0000-00000000cc03')$$, 'You can only make a team with a friend');

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { useAuth } from '@/lib/auth';
-import { addNearbyMapCourts, autoAddMiles, Court, findMappedCourts, GoogleCourt, milesBetween, unlistedCourts, widerMiles } from '@/lib/courts';
+import { addNearbyMapCourts, autoAddMiles, Court, fetchRemovedSpots, findMappedCourts, GoogleCourt, milesBetween, RemovedSpot, unlistedCourts, widerMiles, withoutRemoved } from '@/lib/courts';
 import { kv } from '@/lib/kv';
 import { LatLng } from '@/lib/location';
 
@@ -34,6 +34,15 @@ function markTried(cell: string) {
 export function useMappedCourts(here: LatLng | null, courts: Court[] | null, reload: () => void, miles: number) {
   const { demoMode } = useAuth();
   const [spots, setSpots] = useState<GoogleCourt[]>([]);
+  const [removed, setRemoved] = useState<RemovedSpot[]>([]);
+  // Wait until we know which courts an admin removed, so none are added back.
+  const [removedReady, setRemovedReady] = useState(demoMode);
+  useEffect(() => {
+    if (demoMode) return;
+    fetchRemovedSpots()
+      .then(setRemoved)
+      .finally(() => setRemovedReady(true));
+  }, [demoMode]);
   const cell = here ? `${here.lat.toFixed(2)},${here.lng.toFixed(2)}` : null;
 
   useEffect(() => {
@@ -59,10 +68,10 @@ export function useMappedCourts(here: LatLng | null, courts: Court[] | null, rel
 
   // Add the close ones to Sickle.
   useEffect(() => {
-    if (demoMode || !here || !cell || !courts || spots.length === 0 || tried.has(cell) || triedRecently(cell)) return;
+    if (demoMode || !removedReady || !here || !cell || !courts || spots.length === 0 || tried.has(cell) || triedRecently(cell)) return;
     markTried(cell);
     const close = unlistedCourts(
-      spots.filter((g) => milesBetween(here, g) <= autoAddMiles),
+      withoutRemoved(spots.filter((g) => milesBetween(here, g) <= autoAddMiles), removed),
       courts,
     );
     if (close.length === 0) return;
@@ -70,8 +79,8 @@ export function useMappedCourts(here: LatLng | null, courts: Court[] | null, rel
       if (added > 0) reload();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demoMode, cell, courts, spots]);
+  }, [demoMode, cell, courts, spots, removedReady]);
 
-  const suggestions = here && courts ? unlistedCourts(spots.filter((g) => milesBetween(here, g) <= miles), courts) : [];
+  const suggestions = here && courts ? unlistedCourts(withoutRemoved(spots.filter((g) => milesBetween(here, g) <= miles), removed), courts) : [];
   return { suggestions, remove: (placeId: string) => setSpots((list) => list.filter((g) => g.place_id !== placeId)) };
 }

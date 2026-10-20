@@ -1,11 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { Alert, View } from 'react-native';
 
-import { Body, Button, Card, Chip, Field, Heading, Screen } from '@/components/ui';
+import { Body, Button, Card, Chip, Field, Heading, Screen, SearchField } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { fetchFriends, FriendRow } from '@/lib/friends';
-import { createPerson, deletePerson, fetchMyPeople, linkPerson, PersonRow, renamePerson } from '@/lib/matches';
+import { createPerson, deletePerson, FoundPlayer, fetchMyPeople, linkPerson, PersonRow, renamePerson, searchPlayers } from '@/lib/matches';
 
 // People you added by name because they aren't on the app. You can rename or
 // remove them, and once they join (and you are friends) link their name to
@@ -18,6 +18,17 @@ export default function PeopleScreen() {
   const [open, setOpen] = useState<string | null>(null);
   const [renaming, setRenaming] = useState('');
   const [linking, setLinking] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [found, setFound] = useState<FoundPlayer[]>([]);
+
+  useEffect(() => {
+    if (q.trim().length < 2) {
+      setFound([]);
+      return;
+    }
+    const timer = setTimeout(() => searchPlayers(demoMode, q).then(setFound), 250);
+    return () => clearTimeout(timer);
+  }, [q, demoMode]);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -44,7 +55,7 @@ export default function PeopleScreen() {
     }
   };
 
-  const link = (p: PersonRow, f: FriendRow) =>
+  const link = (p: PersonRow, f: { id: string; name: string }) =>
     Alert.alert(`Link ${p.display_name} to ${f.name}?`, `Every game with ${p.display_name} moves onto ${f.name}'s account and shows in their history. This can't be undone.`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -73,7 +84,7 @@ export default function PeopleScreen() {
     <Screen>
       <Card style={{ padding: 14 }}>
         <Body size={14} tone="subtle">
-          These are players you added by name. Only you can see them. When one joins Sickle and you are friends, link them so their games land on their real account.
+          These are players you added by name. Only you can see them. When one joins Sickle, link them so their games land on their real account.
         </Body>
       </Card>
 
@@ -121,18 +132,19 @@ export default function PeopleScreen() {
             <View style={{ gap: 10 }}>
               <Field label="Name" value={renaming} onChangeText={setRenaming} maxLength={40} autoCapitalize="words" />
               <Button label="Save name" variant="outline" disabled={busy || !renaming.trim() || renaming.trim() === p.display_name} onPress={() => run(() => renamePerson(demoMode, p.profile_id, renaming.trim()))} />
-              <Button label={linking === p.profile_id ? 'Hide friends' : 'Link to a friend’s account'} variant="outline" onPress={() => setLinking(linking === p.profile_id ? null : p.profile_id)} />
+              <Button label={linking === p.profile_id ? 'Hide search' : 'Link to their account'} variant="outline" onPress={() => setLinking(linking === p.profile_id ? null : p.profile_id)} />
               {linking === p.profile_id ? (
                 <View style={{ gap: 8 }}>
                   <Body size={13} tone="muted">
-                    Pick the friend this is. Add them as a friend first if they are not on this list.
+                    Search for who this is. They don&apos;t have to be your friend.
                   </Body>
+                  <SearchField label="Find them" placeholder="Name or username" value={q} onChangeText={setQ} style={{ height: 40 }} />
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {friends.map((f) => (
-                      <Chip key={f.id} label={f.name} onPress={() => link(p, f)} />
+                    {(q.trim().length >= 2 ? found.map((f) => ({ id: f.id, name: f.name, note: `@${f.username}` })) : friends.map((f) => ({ id: f.id, name: f.name, note: '' }))).map((f) => (
+                      <Chip key={f.id} label={f.note ? `${f.name} · ${f.note}` : f.name} onPress={() => link(p, f)} />
                     ))}
                   </View>
-                  {friends.length === 0 ? <Body size={13} tone="muted">No friends yet.</Body> : null}
+                  {q.trim().length >= 2 && found.length === 0 ? <Body size={13} tone="muted">Nobody found.</Body> : null}
                 </View>
               ) : null}
               <Button label="Remove" variant="dangerOutline" onPress={() => remove(p)} />

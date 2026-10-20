@@ -10,6 +10,7 @@ import { Body, Button, Card, Chip, Heading, Screen, Segmented } from '@/componen
 import { useAuth } from '@/lib/auth';
 import { fetchRatingSummary, RatingSummary } from '@/lib/matches';
 import { useProfile } from '@/lib/profile';
+import { fetchReportCount } from '@/lib/reports';
 import { supabase } from '@/lib/supabase';
 import { ThemePreference, useTheme } from '@/lib/theme';
 
@@ -17,6 +18,7 @@ export default function SettingsScreen() {
   const { preference, setPreference } = useTheme();
   const { session, demoMode } = useAuth();
   const { profile, refresh, adminMode, setAdminMode } = useProfile();
+  const [reportCount, setReportCount] = useState(0);
   const { colors } = useTheme();
   const [summary, setSummary] = useState<RatingSummary | null>(null);
   // null until loaded; undefined if the database doesn't have the setting yet.
@@ -25,6 +27,7 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     fetchRatingSummary(demoMode).then(setSummary);
+    fetchReportCount(demoMode).then(setReportCount);
     if (demoMode || !supabase || !profile) return;
     supabase
       .from('profiles')
@@ -183,6 +186,9 @@ export default function SettingsScreen() {
             <>
               <Link href="/admin/courts" asChild>
                 <Button label="Review submitted courts" variant="outline" />
+              </Link>
+              <Link href="/admin/reports" asChild>
+                <Button label={reportCount > 0 ? `Reports (${reportCount} open)` : 'Reports'} variant="outline" />
               </Link>
               <Link href="/admin/admins" asChild>
                 <Button label="Manage admins" variant="outline" />

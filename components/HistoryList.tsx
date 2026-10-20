@@ -20,7 +20,8 @@ export function HistoryList({ rows, empty }: { rows: HistoryRow[] | null; empty:
     (rows ?? []).map((r) => ({ row: r, singles: Boolean(r.is_singles), opponent: r.opponent_id })),
     filter,
   ).map((x) => x.row);
-  const paged = usePaged(shownRows, 5);
+  // The last three games, then See more opens all the rest at once.
+  const paged = usePaged(shownRows, 3, 100000);
   if (rows === null) return <Body tone="muted">Loading…</Body>;
   if (rows.length === 0) {
     return (
@@ -56,9 +57,11 @@ export function HistoryList({ rows, empty }: { rows: HistoryRow[] | null; empty:
               </Body>
             </View>
             <View style={{ flex: 1 }}>
-              <Body weight="semibold">vs {r.opponent_name}</Body>
+              <Body weight="semibold" numberOfLines={2}>
+                vs {r.opponent_name}
+              </Body>
             </View>
-            <Body size={13} tone="subtle">
+            <Body size={13} tone="subtle" style={{ minWidth: 64, textAlign: 'right' }}>
               {formatScores(r.games ?? [])}
             </Body>
           </View>

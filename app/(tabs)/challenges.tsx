@@ -75,7 +75,8 @@ export default function ChallengesScreen() {
   const myDoubles = myTeams.filter((t) => !t.is_singles);
   const isDoubles = (r: ChallengeRow) => myDoubles.some((t) => t.team_id === r.my_team_id);
   const myTeamPlayers = useTeamPlayers(demoMode, myDoubles);
-  const upcoming = all.filter((r) => r.status === 'accepted' && !(r.match_status === 'awaiting_confirmation' && r.awaiting_me));
+  // Only scheduled challenges. Games that were logged after the fact never show here.
+  const upcoming = all.filter((r) => r.status === 'accepted' && !r.logged && !r.match_id);
   const played = all.filter((r) => r.status === 'completed' || (r.match_status && r.match_status !== 'awaiting_confirmation'));
 
   const playedPaged = usePaged(played, 8);
@@ -176,7 +177,7 @@ export default function ChallengesScreen() {
 
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Link href="/challenge/player" asChild>
-          <Button label="Challenge a player" style={{ flex: 1 }} />
+          <Button label="Challenge" style={{ flex: 1 }} />
         </Link>
         <Link href="/log-game" asChild>
           <Button label="Log a game" variant="outline" style={{ flex: 1 }} />
@@ -324,22 +325,18 @@ export default function ChallengesScreen() {
                   {r.court_name} · {formatWhen(r.proposed_time)}
                 </Body>
               </View>
-              {r.match_id ? (
-                <Link href={{ pathname: '/match/[id]', params: { id: r.challenge_id } }} asChild>
-                  <Pressable accessibilityRole="link">
-                    <Body size={14} tone="subtle">
-                      {formatScores(r.games ?? [])} · {matchStatusText(r)}
-                    </Body>
-                  </Pressable>
-                </Link>
-              ) : (
-                <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                {r.i_challenged ? (
                   <Link href={{ pathname: '/score/[challengeId]', params: { challengeId: r.challenge_id } }} asChild>
-                    <Button label="Enter score" style={{ flex: 1 }} />
+                    <Button label={r.challenger_needs_partner ? 'Pick partner and enter score' : 'Enter score'} style={{ flex: 1 }} />
                   </Link>
-                  <Button label="Call off" variant="outline" disabled={busy === r.challenge_id} onPress={() => askCancel(r)} />
-                </View>
-              )}
+                ) : (
+                  <Body size={13} tone="muted" style={{ flex: 1 }}>
+                    {r.their_team_name.split(' ')[0]} enters the score after you play.
+                  </Body>
+                )}
+                <Button label="Call off" variant="outline" disabled={busy === r.challenge_id} onPress={() => askCancel(r)} />
+              </View>
             </Card>
           ))}
         </>

@@ -11,6 +11,7 @@ export type Profile = {
   display_name: string;
   skill_level: number | null;
   is_admin: boolean;
+  avatar_url?: string | null;
 };
 
 type ProfileState = {
@@ -74,7 +75,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, display_name, skill_level, is_admin')
+      .select('id, username, display_name, skill_level, is_admin, avatar_url')
       .eq('id', userId)
       .maybeSingle();
     // On a network error keep what we had rather than sending them to setup.

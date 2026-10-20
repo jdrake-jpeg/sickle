@@ -4,7 +4,7 @@ import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 
 import { fonts } from '@/constants/theme';
@@ -24,6 +24,10 @@ export const unstable_settings = {
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+// The app icon has no name on it, so the opening logo stays up a little longer
+// and fades out slowly (the fade is iOS only; Android just hides it).
+const splashMinMs = 1800;
+SplashScreen.setOptions({ duration: 700, fade: true });
 setupNotificationHandler();
 
 export default function RootLayout() {
@@ -42,11 +46,18 @@ export default function RootLayout() {
     if (error) throw error;
   }, [error]);
 
+  // The logo shows for at least splashMinMs, even when everything loads faster.
+  const [shownLongEnough, setShownLongEnough] = useState(false);
   useEffect(() => {
-    if (loaded) {
+    const timer = setTimeout(() => setShownLongEnough(true), splashMinMs);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (loaded && shownLongEnough) {
       SplashScreen.hideAsync();
     }
-  }, [loaded]);
+  }, [loaded, shownLongEnough]);
 
   if (!loaded) {
     return null;
@@ -115,6 +126,7 @@ function RootLayoutNav() {
           <Stack.Screen name="team/[id]" options={{ title: 'Team' }} />
           <Stack.Screen name="admin/courts" options={{ title: 'Review courts' }} />
           <Stack.Screen name="admin/admins" options={{ title: 'Manage admins' }} />
+          <Stack.Screen name="admin/reports" options={{ title: 'Reports' }} />
           <Stack.Screen name="player/[id]" options={{ title: 'Player' }} />
           <Stack.Screen name="settings" options={{ title: 'Settings', presentation: 'modal' }} />
           <Stack.Screen name="notifications" options={{ title: 'Alerts' }} />

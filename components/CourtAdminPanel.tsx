@@ -4,7 +4,8 @@ import { Alert, View } from 'react-native';
 
 import { CourtMap } from '@/components/CourtMap';
 import { Body, Button, Card, Field, SectionHeader, Segmented } from '@/components/ui';
-import { adminRemoveCourt, adminSetCourtNote, adminUpdateCourt, Court } from '@/lib/courts';
+import { LightsPicker, LightsValue } from '@/components/LightsPicker';
+import { adminRemoveCourt, adminSetCourtLights, adminSetCourtNote, adminUpdateCourt, Court } from '@/lib/courts';
 import { LatLng } from '@/lib/location';
 
 type Setting = 'outdoor' | 'indoor';
@@ -29,6 +30,7 @@ export function CourtAdminPanel({ court, demoMode, onSaved }: { court: Court; de
   const [setting, setSetting] = useState<Setting>(court.indoor ? 'indoor' : 'outdoor');
   const [pin, setPin] = useState<LatLng>({ lat: court.lat, lng: court.lng });
   const [adminNote, setAdminNote] = useState(court.admin_note ?? '');
+  const [lights, setLights] = useState<LightsValue>({ has: court.has_lights ?? null, until: court.lights_until ?? null });
   const [busy, setBusy] = useState(false);
 
   const startEditing = () => {
@@ -37,6 +39,7 @@ export function CourtAdminPanel({ court, demoMode, onSaved }: { court: Court; de
     setAdminNote(court.admin_note ?? '');
     setCount(court.court_count ? String(court.court_count) : '');
     setSetting(court.indoor ? 'indoor' : 'outdoor');
+    setLights({ has: court.has_lights ?? null, until: court.lights_until ?? null });
     setPin({ lat: court.lat, lng: court.lng });
     setEditing(true);
   };
@@ -61,6 +64,8 @@ export function CourtAdminPanel({ court, demoMode, onSaved }: { court: Court; de
       // even before the notes update is in the database.
       const noteChanged = adminNote.trim() !== (court.admin_note ?? '');
       if (noteChanged) await adminSetCourtNote(demoMode, court.id, adminNote);
+      const lightsChanged = lights.has !== (court.has_lights ?? null) || lights.until !== (court.lights_until ?? null);
+      if (lightsChanged && lights.has !== null) await adminSetCourtLights(demoMode, court.id, lights.has, lights.until);
       onSaved({
         ...court,
         name: name.trim(),
@@ -70,6 +75,8 @@ export function CourtAdminPanel({ court, demoMode, onSaved }: { court: Court; de
         lat: pin.lat,
         lng: pin.lng,
         admin_note: adminNote.trim() || null,
+        has_lights: lights.has !== null ? lights.has : court.has_lights,
+        lights_until: lights.has ? lights.until : lights.has === false ? null : court.lights_until,
       });
       setEditing(false);
     } catch (e) {
@@ -130,6 +137,7 @@ export function CourtAdminPanel({ court, demoMode, onSaved }: { court: Court; de
               { value: 'indoor', label: 'Indoor' },
             ]}
           />
+          <LightsPicker value={lights} onChange={setLights} />
           <Body size={13} tone="muted">
             Wrong spot? Tap the map or drag the pin.
           </Body>

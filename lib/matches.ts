@@ -35,6 +35,8 @@ export type ChallengeRow = {
   best_of?: BestOf;
   // A doubles challenge to a player with no team yet: they pick a partner to accept.
   needs_partner?: boolean;
+  // You sent a doubles challenge and have not said who your partner is yet.
+  challenger_needs_partner?: boolean;
   // A game that was logged after it happened, with no challenge.
   logged?: boolean;
 };
@@ -616,4 +618,31 @@ export function matchStatusText(row: Pick<ChallengeRow, 'match_status' | 'awaiti
     default:
       return '';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Round 10: partner picked later, recent players, find anyone
+// ---------------------------------------------------------------------------
+
+export type FoundPlayer = { id: string; name: string; username: string };
+
+export async function setChallengePartner(demoMode: boolean, challengeId: string, partnerId: string): Promise<string | null> {
+  if (demoMode || !supabase) return null;
+  const team = await rpcOrThrow<string>('set_challenge_partner', { p_challenge: challengeId, p_partner: partnerId });
+  await refreshChallenges(false);
+  return team;
+}
+
+// People you have played with or against, newest first.
+export async function fetchRecentPlayers(demoMode: boolean): Promise<{ id: string; name: string; person: boolean }[]> {
+  if (demoMode || !supabase) return [];
+  const { data } = await supabase.rpc('recent_players');
+  return ((data ?? []) as { profile_id: string; display_name: string; is_person: boolean }[]).map((p) => ({ id: p.profile_id, name: p.display_name, person: p.is_person }));
+}
+
+export async function searchPlayers(demoMode: boolean, query: string): Promise<FoundPlayer[]> {
+  const q = query.trim();
+  if (q.length < 2 || demoMode || !supabase) return [];
+  const { data } = await supabase.rpc('search_players', { p_query: q });
+  return ((data ?? []) as { profile_id: string; display_name: string; username: string }[]).map((p) => ({ id: p.profile_id, name: p.display_name, username: p.username }));
 }

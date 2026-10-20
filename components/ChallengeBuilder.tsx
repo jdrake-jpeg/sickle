@@ -40,7 +40,10 @@ export function ChallengeBuilder({ playerId, firstName, blocked, blockedNote }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mine]);
 
-  const myTeam = myDoubles.find((t) => t.team_id === myPick);
+  const mySingles = (mine ?? []).find((t) => t.is_singles);
+  // You don't know your partner yet: you pick them when you enter the score.
+  const partnerLater = myPick === 'later' || (kind === 'doubles' && myDoubles.length === 0);
+  const myTeam = partnerLater ? undefined : myDoubles.find((t) => t.team_id === myPick);
   // The challenge goes to one of their teams. They can switch to another when they accept.
   const theirTeam = theirDoubles[0];
 
@@ -48,6 +51,11 @@ export function ChallengeBuilder({ playerId, firstName, blocked, blockedNote }: 
     if (kind === 'singles') {
       if (!theirSingles) return;
       router.push({ pathname: '/challenge/new', params: { team: theirSingles.team_id, teamName: firstName, bestOf: String(bestOf) } });
+    } else if (partnerLater && mySingles && (theirSingles || theirTeam)) {
+      router.push({
+        pathname: '/challenge/new',
+        params: { team: (theirSingles ?? theirTeam).team_id, teamName: firstName, myTeam: mySingles.team_id, bestOf: String(bestOf), player: playerId, needsPartner: '1' },
+      });
     } else if (myTeam && theirTeam) {
       router.push({ pathname: '/challenge/new', params: { team: theirTeam.team_id, teamName: firstName, myTeam: myTeam.team_id, bestOf: String(bestOf) } });
     } else if (myTeam && theirSingles) {
@@ -59,7 +67,7 @@ export function ChallengeBuilder({ playerId, firstName, blocked, blockedNote }: 
     }
   };
 
-  const ready = kind === 'singles' ? Boolean(theirSingles) : Boolean(myTeam && (theirTeam || theirSingles));
+  const ready = kind === 'singles' ? Boolean(theirSingles) : Boolean(partnerLater ? mySingles && (theirTeam || theirSingles) : myTeam && (theirTeam || theirSingles));
 
   return (
     <Card style={{ padding: 16, gap: 14 }} highlighted>
@@ -95,21 +103,17 @@ export function ChallengeBuilder({ playerId, firstName, blocked, blockedNote }: 
             />
           </View>
 
-          {kind === 'singles' ? null : mine === null || theirs === null ? null : myDoubles.length === 0 ? (
-            <View style={{ gap: 8 }}>
-              <Body tone="muted">Doubles needs a team. Make one with a friend first.</Body>
-              <Button label="Make a team" variant="outline" onPress={() => router.push('/team/new')} />
-            </View>
-          ) : (
+          {kind === 'singles' ? null : mine === null || theirs === null ? null : (
             <View style={{ gap: 8 }}>
               <Body size={13} weight="semibold" tone="muted">
-                {myDoubles.length > 1 ? 'Pick your team' : 'Your team'}
+                Who is your team?
               </Body>
               {myDoubles.map((t) => (
-                <TeamPick key={t.team_id} name={t.team_name} players={players[t.team_id]} selected={myPick === t.team_id} onPress={() => setMyPick(t.team_id)} />
+                <TeamPick key={t.team_id} name={t.team_name} players={players[t.team_id]} selected={!partnerLater && myPick === t.team_id} onPress={() => setMyPick(t.team_id)} />
               ))}
+              <TeamPick name="Not sure yet" players="You pick your partner when you enter the score" selected={partnerLater} onPress={() => setMyPick('later')} />
               <Body size={13} tone="muted">
-                {theirDoubles.length === 0 ? `${firstName} picks a partner when they accept.` : `${firstName} picks their team when they accept.`}
+                {theirDoubles.length === 0 || partnerLater ? `${firstName} picks a partner when they accept.` : `${firstName} picks their team when they accept.`}
               </Body>
             </View>
           )}

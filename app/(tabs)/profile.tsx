@@ -43,6 +43,8 @@ export default function ProfileScreen() {
   );
 
   const name = profile?.display_name ?? '';
+  // Teams, Friends and Chats cards share one top row so all three are the same size.
+  const cardTop = { height: 30, justifyContent: 'center' as const };
   const doubles = teams.filter((t) => !t.is_singles);
   const singlesIds = new Set(teams.filter((t) => t.is_singles).map((t) => t.team_id));
   const history = (challenges ?? []).filter((c) => c.match_id);
@@ -55,7 +57,8 @@ export default function ProfileScreen() {
   const wins = confirmed.filter((c) => c.i_won).length;
   const losses = confirmed.length - wins;
   const opponents = new Set(confirmed.map((c) => c.their_team_id)).size;
-  const paged = usePaged(filtered, 5);
+  // The last three games; See more opens the rest.
+  const paged = usePaged(filtered, 3, 100000);
 
   return (
     <Screen>
@@ -75,7 +78,11 @@ export default function ProfileScreen() {
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
         <View style={{ borderWidth: 3, borderColor: colors.accentText, borderRadius: 44, padding: 2 }}>
-          <Avatar initials={initialsOf(name)} size={72} />
+          <Link href="/profile-edit" asChild>
+            <Pressable accessibilityRole="button" accessibilityLabel="Change your picture">
+              <Avatar initials={initialsOf(name)} size={72} uri={profile?.avatar_url} />
+            </Pressable>
+          </Link>
         </View>
         <View style={{ gap: 4, flex: 1 }}>
           <Display size={28}>{name.toUpperCase()}</Display>
@@ -89,7 +96,7 @@ export default function ProfileScreen() {
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Link href={{ pathname: '/history/[id]', params: { id: profile?.id ?? '' } }} asChild>
             <Pressable accessibilityRole="link" accessibilityLabel="Record. Open match history" style={{ flex: 1 }}>
-              <Stat value={`${wins}–${losses}`} label="Record · history" />
+              <Stat value={`${wins}–${losses}`} label="Record · history" tone="accent" />
             </Pressable>
           </Link>
           <Stat value={confirmed.length ? `${Math.round((wins / confirmed.length) * 100)}%` : '–'} label="Win rate" />
@@ -101,10 +108,12 @@ export default function ProfileScreen() {
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Link href="/my-teams" asChild>
           <Pressable accessibilityRole="link" style={{ flex: 1 }}>
-            <Card style={{ padding: 12, gap: 2 }}>
-              <Heading size={22} tone="accent">
-                {doubles.length}
-              </Heading>
+            <Card style={{ padding: 12, gap: 2, flex: 1 }}>
+              <View style={cardTop}>
+                <Heading size={22} tone="accent">
+                  {doubles.length}
+                </Heading>
+              </View>
               <Body size={13} weight="semibold">
                 Teams
               </Body>
@@ -113,8 +122,12 @@ export default function ProfileScreen() {
         </Link>
         <Link href="/my-friends" asChild>
           <Pressable accessibilityRole="link" style={{ flex: 1 }}>
-            <Card style={{ padding: 12, gap: 2 }} highlighted={requests > 0}>
-              <Heading size={22}>{friendCount}</Heading>
+            <Card style={{ padding: 12, gap: 2, flex: 1 }} highlighted={requests > 0}>
+              <View style={cardTop}>
+                <Heading size={22} tone="accent">
+                  {friendCount}
+                </Heading>
+              </View>
               <Body size={13} weight="semibold">
                 Friends
               </Body>
@@ -128,10 +141,10 @@ export default function ProfileScreen() {
         </Link>
         <Link href="/chats" asChild>
           <Pressable accessibilityRole="link" style={{ flex: 1 }}>
-            <Card style={{ padding: 12, gap: 2 }} highlighted={unread > 0}>
-              {/* A person icon that opens chats; the number only shows when something is new. */}
-              <View style={{ height: 28, justifyContent: 'center' }}>
-                <SymbolView name="person.2.fill" tintColor={unread > 0 ? colors.danger : colors.text} size={24} />
+            <Card style={{ padding: 12, gap: 2, flex: 1 }} highlighted={unread > 0}>
+              {/* A green icon that opens chats; "new" only shows when something is unread. */}
+              <View style={cardTop}>
+                <SymbolView name="person.2.fill" tintColor={unread > 0 ? colors.danger : colors.accentText} size={24} />
               </View>
               <Body size={13} weight="semibold">
                 Chats

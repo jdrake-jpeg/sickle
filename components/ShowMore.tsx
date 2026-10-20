@@ -15,5 +15,5 @@ export function usePaged<T>(items: T[], size = 5, step = size * 2) {
 
 export function ShowMore({ hasMore, remaining, onPress }: { hasMore: boolean; remaining: number; onPress: () => void }) {
   if (!hasMore) return null;
-  return <Button label={`Show more (${remaining} left)`} variant="outline" size="sm" onPress={onPress} />;
+  return <Button label={`See more (${remaining})`} variant="outline" size="sm" onPress={onPress} />;
 }

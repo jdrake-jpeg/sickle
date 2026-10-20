@@ -86,7 +86,8 @@ export default function NewChallengeScreen() {
 
   // Only your teams of the same kind can play: your singles team against a
   // singles team, a doubles team against a doubles team.
-  const playable = singles === null || teams === null ? null : teams.filter((t) => Boolean(t.is_singles) === singles);
+  // A doubles challenge to one player can also go out with your singles team standing in for a partner you haven't picked yet.
+  const playable = singles === null || teams === null ? null : toPlayer ? teams : teams.filter((t) => Boolean(t.is_singles) === singles);
 
   useEffect(() => {
     if (playable && playable.length === 1) setMyTeam(playable[0].team_id);
@@ -158,8 +159,8 @@ export default function NewChallengeScreen() {
           {(playable ?? []).map((t) => (
             <TeamPick
               key={t.team_id}
-              name={t.team_name}
-              players={players[t.team_id]}
+              name={t.is_singles ? 'Not sure yet' : t.team_name}
+              players={t.is_singles ? 'You pick your partner when you enter the score' : players[t.team_id]}
               selected={myTeam === t.team_id}
               onPress={() => setMyTeam(t.team_id)}
             />

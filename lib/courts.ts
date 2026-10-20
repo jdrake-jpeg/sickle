@@ -152,6 +152,16 @@ export async function findMappedCourts(near: { lat: number; lng: number }, miles
 export const unlistedCourts = (spots: GoogleCourt[], listed: Court[]) =>
   spots.filter((g) => !listed.some((c) => milesBetween(c, g) < 0.06 || c.google_place_id === g.place_id));
 
+// Spots an admin removed or rejected. They stay off the map, so a deleted court doesn't come back as a gray pin.
+export type RemovedSpot = { lat: number; lng: number; google_place_id: string | null };
+export async function fetchRemovedSpots(): Promise<RemovedSpot[]> {
+  if (!supabase) return [];
+  const { data } = await supabase.rpc('removed_spots');
+  return (data ?? []) as RemovedSpot[];
+}
+export const withoutRemoved = (spots: GoogleCourt[], removed: RemovedSpot[]) =>
+  spots.filter((g) => !removed.some((r) => (r.google_place_id && r.google_place_id === g.place_id) || milesBetween(r, g) < 0.06));
+
 // The closest few unlisted courts, for screens that only need a handful.
 export async function findGoogleCourts(near: { lat: number; lng: number }, listed: Court[]): Promise<GoogleCourt[]> {
   return unlistedCourts(await findMappedCourts(near, nearbyMiles), listed).slice(0, maxSuggestions);
@@ -379,6 +389,13 @@ export async function adminUpdateCourt(demoMode: boolean, courtId: string, edit:
 export async function adminSetCourtNote(demoMode: boolean, courtId: string, note: string) {
   if (demoMode || !supabase) return;
   const { error } = await supabase.rpc('admin_set_court_note', { p_court: courtId, p_note: note });
+  if (error) throw error;
+}
+
+// Admin: say whether a court has lights and until when.
+export async function adminSetCourtLights(demoMode: boolean, courtId: string, has: boolean, until: number | null) {
+  if (demoMode || !supabase) return;
+  const { error } = await supabase.rpc('admin_set_court_lights', { p_court: courtId, p_has_lights: has, p_until: until });
   if (error) throw error;
 }
 

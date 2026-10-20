@@ -108,7 +108,7 @@ export default function GameScreen() {
   };
 
   const askDelete = () =>
-    Alert.alert('Delete this game?', 'It stops counting toward records and leaderboards. If a real player was on the other side they have to agree.', [
+    Alert.alert('Delete this game?', d.logged ? 'It stops counting toward records and leaderboards. The others in the game are told.' : 'It stops counting toward records and leaderboards. The other team has to agree.', [
       { text: 'Keep it', style: 'cancel' },
       {
         text: 'Delete',
@@ -170,7 +170,7 @@ export default function GameScreen() {
       <Screen>
         <Card style={{ padding: 14 }}>
           <Body size={14} tone="subtle">
-            Fix the score, court or time. {otherName} may be asked to agree first, and nothing changes until they do.
+            {d.logged ? 'Fix the score, court or time. It changes right away and the others in the game are told.' : `Fix the score, court or time. ${otherName} has to agree before it changes.`}
           </Body>
         </Card>
         <ScoreEntry teamA={d.team_a.name} teamB={d.team_b.name} value={draft.slice(0, d.best_of)} onChange={(next) => setDraft([...next, ...draft.slice(next.length)])} />
@@ -232,20 +232,12 @@ export default function GameScreen() {
             {d.logged ? ' · Logged after playing' : ''}
           </Body>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ flex: 1, gap: 4 }}>
-            <Heading size={18}>{d.team_a.name}</Heading>
-            {aWon ? <WinTag /> : null}
-          </View>
-          <Heading size={44} style={{ fontFamily: fonts.display }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+          <TeamBlock team={d.team_a} won={aWon} align="left" />
+          <Heading size={40} style={{ fontFamily: fonts.display, marginTop: -4 }}>
             {winsA}–{winsB}
           </Heading>
-          <View style={{ flex: 1, gap: 4, alignItems: 'flex-end' }}>
-            <Heading size={18} style={{ textAlign: 'right' }}>
-              {d.team_b.name}
-            </Heading>
-            {!aWon ? <WinTag /> : null}
-          </View>
+          <TeamBlock team={d.team_b} won={!aWon} align="right" />
         </View>
         <View style={{ borderTopWidth: 1, borderColor: colors.border }}>
           {d.games.map(([a, b], i) => (
@@ -262,9 +254,7 @@ export default function GameScreen() {
                   {b}
                 </Body>
               </Body>
-              <Body size={13} tone="muted" style={{ flex: 1, textAlign: 'right' }}>
-                {a > b ? d.team_a.name : d.team_b.name}
-              </Body>
+              <View style={{ flex: 1 }} />
             </View>
           ))}
         </View>
@@ -285,8 +275,6 @@ export default function GameScreen() {
             </Pressable>
           </Link>
         </View>
-        <PlayersRow team={d.team_a} />
-        <PlayersRow team={d.team_b} />
         {d.submitted_by_name ? <Row label="Score entered by" value={d.submitted_by_name} /> : null}
         {statusLine(d) ? (
           <Body size={13} tone="subtle">
@@ -322,29 +310,28 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PlayersRow({ team }: { team: DetailTeam }) {
+// One side of the score: each player on their own line, lined up, green when you can tap through to them.
+function TeamBlock({ team, won, align }: { team: DetailTeam; won: boolean; align: 'left' | 'right' }) {
+  const { colors } = useTheme();
+  const right = align === 'right';
   return (
-    <View style={{ gap: 2 }}>
-      <Body size={12} tone="muted">
-        {team.name}
-      </Body>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 12 }}>
-        {team.players.map((p) =>
-          p.placeholder ? (
-            <Body key={p.id} weight="semibold">
-              {p.name}
-            </Body>
-          ) : (
-            <Link key={p.id} href={{ pathname: '/player/[id]', params: { id: p.id } }} asChild>
-              <Pressable accessibilityRole="link">
-                <Body weight="semibold" tone="accent">
-                  {p.name}
-                </Body>
-              </Pressable>
-            </Link>
-          ),
-        )}
-      </View>
+    <View style={{ flex: 1, gap: 6, alignItems: right ? 'flex-end' : 'flex-start' }}>
+      {team.players.map((p) =>
+        p.placeholder ? (
+          <Body key={p.id} weight="bold" size={15} numberOfLines={1} style={{ textAlign: align }}>
+            {p.name}
+          </Body>
+        ) : (
+          <Link key={p.id} href={{ pathname: '/player/[id]', params: { id: p.id } }} asChild>
+            <Pressable accessibilityRole="link">
+              <Body weight="bold" size={15} numberOfLines={1} style={{ color: colors.accentText, textAlign: align }}>
+                {p.name}
+              </Body>
+            </Pressable>
+          </Link>
+        ),
+      )}
+      {won ? <WinTag /> : null}
     </View>
   );
 }

@@ -96,7 +96,7 @@ export default function OnboardingScreen() {
         <Display size={34}>SET UP YOUR PROFILE</Display>
         <Body tone="muted">This is how other players find you and team up.</Body>
         <Body size={13} weight="semibold" tone="accent">
-          Your username and name can&apos;t be changed after you save, so check them first.
+          You can change your username and name later in Edit profile.
         </Body>
       </View>
 

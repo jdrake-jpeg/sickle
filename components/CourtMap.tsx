@@ -21,6 +21,8 @@ export type CourtMapProps = {
   pin?: LatLng | null;
   onPinChange?: (pin: LatLng) => void;
   showsUserLocation?: boolean;
+  // Called when the empty map itself is tapped (not a pin). Used to open it full screen.
+  onMapPress?: () => void;
   // Static previews can't be panned or zoomed.
   interactive?: boolean;
 };
@@ -45,6 +47,7 @@ export function CourtMap({
   onPinChange,
   showsUserLocation = false,
   interactive = true,
+  onMapPress,
 }: CourtMapProps) {
   const { name, colors } = useTheme();
   const map = useRef<MapView>(null);
@@ -73,7 +76,7 @@ export function CourtMap({
         rotateEnabled={false}
         pitchEnabled={false}
         toolbarEnabled={false}
-        onPress={onPinChange ? (e) => placePin(e.nativeEvent.coordinate) : undefined}>
+        onPress={onPinChange ? (e) => placePin(e.nativeEvent.coordinate) : onMapPress}>
         {courts.map((court) => (
           <Marker
             key={court.id}

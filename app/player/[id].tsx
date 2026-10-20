@@ -6,7 +6,7 @@ import { ChallengeBuilder } from '@/components/ChallengeBuilder';
 import { HistoryList } from '@/components/HistoryList';
 import { tierOf } from '@/components/SkillPicker';
 import { VsLine } from '@/components/VsLine';
-import { Avatar, Body, Button, Card, Display, Field, Heading, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
+import { Avatar, Body, Button, Card, Chip, Display, Field, Heading, ListRow, Screen, SectionHeader, Stat } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { addFriend, fetchRelation, Relation, relationLabel, removeFriend } from '@/lib/friends';
@@ -16,7 +16,7 @@ import { Crown, crownText, fetchPlayerCrowns, fetchPlayerOpen, formatTags, Playe
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
 
-type Player = { id: string; name: string; username: string; skill: number | null };
+type Player = { id: string; name: string; username: string; skill: number | null; avatar?: string | null };
 
 // Another player's page: team up with them, or block or report them.
 export default function PlayerScreen() {
@@ -30,6 +30,7 @@ export default function PlayerScreen() {
   const [teamName, setTeamName] = useState('');
   const [reporting, setReporting] = useState(false);
   const [reason, setReason] = useState('');
+  const [reportKind, setReportKind] = useState<'profile' | 'avatar'>('profile');
   const [busy, setBusy] = useState(false);
   const [relation, setRelation] = useState<Relation>(null);
   const [teams, setTeams] = useState<TeamRow[]>([]);
@@ -87,11 +88,11 @@ export default function PlayerScreen() {
     if (demoMode || !supabase) return;
     supabase
       .from('profiles')
-      .select('id, username, display_name, skill_level')
+      .select('id, username, display_name, skill_level, avatar_url')
       .eq('id', id)
       .maybeSingle()
       .then(({ data }) =>
-        setPlayer(data ? { id: data.id, name: data.display_name, username: data.username, skill: data.skill_level } : null),
+        setPlayer(data ? { id: data.id, name: data.display_name, username: data.username, skill: data.skill_level, avatar: data.avatar_url } : null),
       );
   }, [demoMode, id]);
 
@@ -128,12 +129,13 @@ export default function PlayerScreen() {
 
   const sendReport = async () => {
     const ok = await run(() =>
-      supabase!.from('reports').insert({ reporter_id: me, reported_profile_id: player.id, reason: reason.trim() }),
+      supabase!.from('reports').insert({ reporter_id: me, reported_profile_id: player.id, reason: reason.trim(), kind: reportKind }),
     );
     if (!ok) return;
-    Alert.alert('Report sent', 'Thanks. We review every report.');
+    Alert.alert('Report sent', 'Thanks. An admin will look at it.');
     setReporting(false);
     setReason('');
+    setReportKind('profile');
   };
 
   const friendAction = async () => {
@@ -175,7 +177,7 @@ export default function PlayerScreen() {
     <Screen>
       <Stack.Screen options={{ title: `@${player.username}` }} />
       <View style={{ alignItems: 'center', gap: 8, paddingTop: 8 }}>
-        <Avatar initials={initialsOf(player.name)} size={88} />
+        <Avatar initials={initialsOf(player.name)} size={88} uri={player.avatar} />
         <Pressable
           accessibilityRole={crowns.length ? 'button' : undefined}
           disabled={crowns.length === 0}
@@ -322,7 +324,13 @@ export default function PlayerScreen() {
 
       {reporting ? (
         <Card style={{ padding: 16, gap: 12 }}>
-          <Field label="What happened?" placeholder="Tell us what's wrong" value={reason} onChangeText={setReason} multiline maxLength={1000} style={{ height: 96, paddingTop: 12 }} />
+          {player.avatar ? (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Chip label="Their profile" selected={reportKind === 'profile'} onPress={() => setReportKind('profile')} />
+              <Chip label="Their picture" selected={reportKind === 'avatar'} onPress={() => setReportKind('avatar')} />
+            </View>
+          ) : null}
+          <Field label={reportKind === 'avatar' ? 'What is wrong with the picture?' : 'What happened?'} placeholder="Tell us what's wrong" value={reason} onChangeText={setReason} multiline maxLength={1000} style={{ height: 96, paddingTop: 12 }} />
           <Button label="Send report" variant="danger" disabled={busy || !reason.trim()} onPress={sendReport} />
         </Card>
       ) : null}

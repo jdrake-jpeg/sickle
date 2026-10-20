@@ -91,7 +91,8 @@ export default function CourtsScreen() {
   // Courts only show for where you are. Nothing shows until we know that.
   const inRange: CourtWithMiles[] = here ? (wide ? farther : near) : [];
   const pool: CourtWithMiles[] = searching ? results : inRange;
-  const paged = usePaged(pool, listSize, listSize);
+  // Show all courts nearby opens ten more, then See more opens ten at a time.
+  const paged = usePaged(pool, listSize, 10);
   const shown = paged.shown;
   const shownKey = shown.map((c) => c.id).join(',');
 
@@ -206,6 +207,7 @@ export default function CourtsScreen() {
             showsUserLocation={Boolean(here)}
             courts={inRange.map((c) => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, subtitle: courtMeta(c) }))}
             onCourtPress={(id) => router.push(`/court/${id}`)}
+            onMapPress={() => router.push('/court/map')}
             suggestions={suggestions.map((g) => ({ id: g.place_id, name: g.name, lat: g.lat, lng: g.lng }))}
             onSuggestionPress={(placeId) => {
               const g = suggestions.find((x) => x.place_id === placeId);
@@ -317,7 +319,14 @@ export default function CourtsScreen() {
 
         <ShowMore hasMore={paged.hasMore} remaining={paged.remaining} onPress={paged.more} />
         {!searching && here && !wide && farther.length > near.length ? (
-          <Button label="Show all courts nearby" variant="outline" onPress={() => setWide(true)} />
+          <Button
+            label="Show all courts nearby"
+            variant="outline"
+            onPress={() => {
+              setWide(true);
+              paged.more();
+            }}
+          />
         ) : null}
         {!searching && here && wide ? <Button label={`Back to ${nearbyMiles} miles`} variant="ghost" onPress={() => setWide(false)} /> : null}
       </View>

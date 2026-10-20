@@ -1,8 +1,10 @@
 import { supabase } from '@/lib/supabase';
 
-// When a player likes to play: a 2 hour window for each day they pick. The
-// window's start is minutes after midnight. Days are 0 (Sunday) to 6 (Saturday).
-export type PreferredTimes = Record<number, number>;
+// When a player likes to play: a stretch of the day, from a start time to an
+// end time, for each day they pick, like 12 PM to 8 PM. Both are minutes after
+// midnight. Days are 0 (Sunday) to 6 (Saturday).
+export type PreferredWindow = { start: number; end: number };
+export type PreferredTimes = Record<number, PreferredWindow>;
 
 export const noPreferredTimes: PreferredTimes = {};
 
@@ -17,10 +19,19 @@ export const weekDays: { value: number; label: string; long: string }[] = [
   { value: 0, label: 'Sun', long: 'Sunday' },
 ];
 
+// A new day starts as a 2 hour window you can stretch. The latest a window can
+// start is 11:30 PM, and it always ends the same day (midnight at the latest).
 export const windowMinutes = 120;
-// The latest a window can start is 10 PM.
-export const latestStart = 22 * 60;
+export const minWindow = 30;
+export const latestStart = 23 * 60 + 30;
 export const defaultStart = 18 * 60;
+export const dayEnd = 24 * 60;
+
+// Keeps a window sensible: it starts by 11:30 PM and runs at least 30 minutes, ending by midnight.
+export function fixWindow(start: number, end: number): PreferredWindow {
+  const s = Math.max(0, Math.min(latestStart, start));
+  return { start: s, end: Math.max(s + minWindow, Math.min(dayEnd, end)) };
+}
 
 export const hasPreferred = (p: PreferredTimes | null | undefined): p is PreferredTimes => Boolean(p && Object.keys(p).length > 0);
 
@@ -35,9 +46,9 @@ function clock(minutes: number): Clock {
 const clockText = (c: Clock) => (c.minute === 0 ? `${c.hour}` : `${c.hour}:${String(c.minute).padStart(2, '0')}`);
 
 // "7 to 9 PM", "10 AM to 12 PM".
-export function windowText(start: number): string {
-  const a = clock(start);
-  const b = clock(start + windowMinutes);
+export function windowText(w: PreferredWindow): string {
+  const a = clock(w.start);
+  const b = clock(w.end);
   return a.ampm === b.ampm ? `${clockText(a)} to ${clockText(b)} ${b.ampm}` : `${clockText(a)} ${a.ampm} to ${clockText(b)} ${b.ampm}`;
 }
 
@@ -49,15 +60,18 @@ export const timeText = (minutes: number) => {
 
 // "Mon, Wed 7 to 9 PM · Sat 10 AM to 12 PM". Days with the same window are grouped.
 export function preferredText(p: PreferredTimes): string {
-  const groups = new Map<number, string[]>();
+  const groups = new Map<string, { w: PreferredWindow; days: string[] }>();
   for (const d of weekDays) {
-    const start = p[d.value];
-    if (start === undefined) continue;
-    groups.set(start, [...(groups.get(start) ?? []), d.label]);
+    const w = p[d.value];
+    if (w === undefined) continue;
+    const key = `${w.start}-${w.end}`;
+    const g = groups.get(key) ?? { w, days: [] };
+    g.days.push(d.label);
+    groups.set(key, g);
   }
-  return [...groups.entries()]
-    .sort((a, b) => weekDays.findIndex((d) => d.label === a[1][0]) - weekDays.findIndex((d) => d.label === b[1][0]))
-    .map(([start, days]) => `${days.join(', ')} ${windowText(start)}`)
+  return [...groups.values()]
+    .sort((a, b) => weekDays.findIndex((d) => d.label === a.days[0]) - weekDays.findIndex((d) => d.label === b.days[0]))
+    .map(({ w, days }) => `${days.join(', ')} ${windowText(w)}`)
     .join(' · ');
 }
 
@@ -70,11 +84,12 @@ export function nextWindows(p: PreferredTimes, count = 3, from = new Date()): Da
     const day = new Date(from);
     day.setHours(0, 0, 0, 0);
     day.setDate(day.getDate() + i);
-    const minutes = p[day.getDay()];
-    if (minutes === undefined) continue;
+    const w = p[day.getDay()];
+    if (w === undefined) continue;
     const start = new Date(day.getTime());
-    start.setMinutes(minutes);
-    const end = new Date(start.getTime() + windowMinutes * 60_000);
+    start.setMinutes(w.start);
+    const end = new Date(day.getTime());
+    end.setMinutes(w.end);
     if (end.getTime() <= from.getTime()) continue;
     if (start.getTime() < from.getTime()) {
       const now = new Date(from);
@@ -88,28 +103,41 @@ export function nextWindows(p: PreferredTimes, count = 3, from = new Date()): Da
   return out;
 }
 
-type Row = { preferred_windows: Record<string, number> | null };
+// preferred_windows holds each day's start. preferred_ends (added later) holds
+// each day's end; a day without one is the old 2 hour window.
+type Row = { preferred_windows: Record<string, number> | null; preferred_ends?: Record<string, number> | null };
 
 const fromRow = (r: Row | null | undefined): PreferredTimes =>
-  Object.fromEntries(Object.entries(r?.preferred_windows ?? {}).map(([day, start]) => [Number(day), Number(start)]));
+  Object.fromEntries(
+    Object.entries(r?.preferred_windows ?? {}).map(([day, start]) => {
+      const end = r?.preferred_ends?.[day];
+      return [Number(day), fixWindow(Number(start), end === undefined ? Number(start) + windowMinutes : Number(end))];
+    }),
+  );
 
 // Anyone signed in can read these, like the rest of a profile. Quietly empty
 // on a database that doesn't have the newest update yet.
 export async function fetchPreferredTimes(demoMode: boolean, profileId: string | undefined): Promise<PreferredTimes> {
   if (demoMode || !supabase || !profileId) return noPreferredTimes;
-  const { data, error } = await supabase.from('profiles').select('preferred_windows').eq('id', profileId).maybeSingle();
+  const { data, error } = await supabase.from('profiles').select('preferred_windows, preferred_ends').eq('id', profileId).maybeSingle();
   return error ? noPreferredTimes : fromRow(data as Row | null);
 }
 
 export async function fetchPreferredTimesFor(demoMode: boolean, profileIds: string[]): Promise<Record<string, PreferredTimes>> {
   if (demoMode || !supabase || profileIds.length === 0) return {};
-  const { data, error } = await supabase.from('profiles').select('id, preferred_windows').in('id', profileIds);
+  const { data, error } = await supabase.from('profiles').select('id, preferred_windows, preferred_ends').in('id', profileIds);
   if (error) return {};
   return Object.fromEntries(((data ?? []) as (Row & { id: string })[]).map((r) => [r.id, fromRow(r)]));
 }
 
 export async function savePreferredTimes(demoMode: boolean, profileId: string, p: PreferredTimes): Promise<void> {
   if (demoMode || !supabase) return;
-  const { error } = await supabase.from('profiles').update({ preferred_windows: p }).eq('id', profileId);
-  if (error) throw new Error(error.message);
+  const starts = Object.fromEntries(Object.entries(p).map(([d, w]) => [d, w.start]));
+  const ends = Object.fromEntries(Object.entries(p).map(([d, w]) => [d, w.end]));
+  const { error } = await supabase.from('profiles').update({ preferred_windows: starts, preferred_ends: ends }).eq('id', profileId);
+  if (error) {
+    // A database from before the end time update only keeps the start.
+    const old = await supabase.from('profiles').update({ preferred_windows: starts }).eq('id', profileId);
+    if (old.error) throw new Error(old.error.message);
+  }
 }

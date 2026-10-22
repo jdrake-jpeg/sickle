@@ -47,7 +47,8 @@ export default function ProfileScreen() {
   const cardTop = { height: 30, justifyContent: 'center' as const };
   const doubles = teams.filter((t) => !t.is_singles);
   const singlesIds = new Set(teams.filter((t) => t.is_singles).map((t) => t.team_id));
-  const history = (challenges ?? []).filter((c) => c.match_id);
+  // Games with the admin test player are kept out of your real record, unless you are the test player.
+  const history = (challenges ?? []).filter((c) => c.match_id && (!c.is_test || profile?.is_test));
   // One record for everything. The filters change the record and the history together.
   const filtered = applyRecordFilter(
     history.map((c) => ({ c, singles: singlesIds.has(c.my_team_id), opponent: c.their_team_id })),

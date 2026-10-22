@@ -360,7 +360,7 @@ export default function ChallengesScreen() {
                     ) : null}
                   </View>
                   <Body size={13} tone="muted">
-                    {[formatScores(r.games ?? []), r.court_name, r.logged ? 'Logged' : null, matchStatusText(r)].filter(Boolean).join(' · ')}
+                    {[formatScores(r.games ?? []), r.court_name, r.is_test ? 'Test game' : null, r.logged ? 'Logged' : null, matchStatusText(r)].filter(Boolean).join(' · ')}
                   </Body>
                   {r.match_status === 'confirmed' ? (
                     <Body size={13} weight="semibold" tone="accent">

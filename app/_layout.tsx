@@ -7,6 +7,9 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 
+import { View } from 'react-native';
+
+import { TestModeBar } from '@/components/TestModeBar';
 import { fonts } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { setupNotificationHandler } from '@/lib/notifications';
@@ -26,7 +29,7 @@ export const unstable_settings = {
 SplashScreen.preventAutoHideAsync();
 // The app icon has no name on it, so the opening logo stays up a little longer
 // and fades out slowly (the fade is iOS only; Android just hides it).
-const splashMinMs = 1800;
+const splashMinMs = 1200;
 SplashScreen.setOptions({ duration: 700, fade: true });
 setupNotificationHandler();
 
@@ -101,6 +104,7 @@ function RootLayoutNav() {
   return (
     <ThemeProvider value={navigationTheme}>
       <StatusBar style={name === 'dark' ? 'light' : 'dark'} />
+      <View style={{ flex: 1 }}>
       <Stack
         screenOptions={{ headerShadowVisible: false, headerBackTitle: 'Back', headerTintColor: colors.text, headerTitleStyle: { fontFamily: fonts.bodyBold } }}>
         <Stack.Protected guard={signedIn && hasProfile}>
@@ -145,6 +149,8 @@ function RootLayoutNav() {
         <Stack.Screen name="privacy" options={{ title: 'Privacy policy' }} />
         <Stack.Screen name="terms" options={{ title: 'Terms of use' }} />
       </Stack>
+      <TestModeBar />
+      </View>
     </ThemeProvider>
   );
 }

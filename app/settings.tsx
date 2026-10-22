@@ -5,6 +5,7 @@ import { Alert, Switch, View } from 'react-native';
 import { NotificationSettings } from '@/components/NotificationSettings';
 import { PlayPrefs } from '@/components/PlayPrefs';
 import { PreferredTimesEditor } from '@/components/PreferredTimes';
+import { TestAccountControls } from '@/components/TestAccountControls';
 import { skillLevels, tierOf } from '@/components/SkillPicker';
 import { Body, Button, Card, Chip, Heading, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
@@ -187,6 +188,7 @@ export default function SettingsScreen() {
               <Link href="/admin/courts" asChild>
                 <Button label="Review submitted courts" variant="outline" />
               </Link>
+              <TestAccountControls />
               <Link href="/admin/reports" asChild>
                 <Button label={reportCount > 0 ? `Reports (${reportCount} open)` : 'Reports'} variant="outline" />
               </Link>

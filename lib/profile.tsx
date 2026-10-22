@@ -12,6 +12,8 @@ export type Profile = {
   skill_level: number | null;
   is_admin: boolean;
   avatar_url?: string | null;
+  // The admin's test player. Not an admin; hidden from everyone else.
+  is_test?: boolean;
 };
 
 type ProfileState = {
@@ -73,11 +75,17 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setState({ ready: true, profile: null });
       return true;
     }
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('profiles')
-      .select('id, username, display_name, skill_level, is_admin, avatar_url')
+      .select('id, username, display_name, skill_level, is_admin, avatar_url, is_test')
       .eq('id', userId)
       .maybeSingle();
+    // A database from before the test account update has no is_test column yet.
+    if (error) {
+      const old = await supabase.from('profiles').select('id, username, display_name, skill_level, is_admin, avatar_url').eq('id', userId).maybeSingle();
+      data = old.data as typeof data;
+      error = old.error;
+    }
     // On a network error keep what we had rather than sending them to setup.
     if (error) {
       setState((s) => ({ ...s, ready: true }));

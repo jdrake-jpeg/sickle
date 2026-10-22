@@ -37,6 +37,8 @@ export type ChallengeRow = {
   needs_partner?: boolean;
   // You sent a doubles challenge and have not said who your partner is yet.
   challenger_needs_partner?: boolean;
+  // A game with the admin's test player.
+  is_test?: boolean;
   // A game that was logged after it happened, with no challenge.
   logged?: boolean;
 };

@@ -2,7 +2,6 @@ import { Link, Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
-import { ChallengeBuilder } from '@/components/ChallengeBuilder';
 import { HistoryList } from '@/components/HistoryList';
 import { tierOf } from '@/components/SkillPicker';
 import { VsLine } from '@/components/VsLine';
@@ -10,8 +9,8 @@ import { Avatar, Body, Button, Card, Chip, Display, Field, Heading, ListRow, Scr
 import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { addFriend, fetchRelation, Relation, relationLabel, removeFriend } from '@/lib/friends';
-import { fetchMyTeams, fetchPlayerHistory, fetchPlayerTeams, formatWhen, HistoryRow, TeamRow, useChallenges, useTeamPlayers } from '@/lib/matches';
-import { fetchPreferredTimes, hasPreferred, noPreferredTimes, preferredText, PreferredTimes } from '@/lib/preferred';
+import { fetchFriendCounts, fetchMyTeams, fetchPlayerHistory, fetchPlayerOpponents, fetchPlayerTeams, formatWhen, FriendCounts, HistoryRow, TeamRow, useChallenges, useTeamPlayers, winRateLabel, winRateText } from '@/lib/matches';
+import { fetchPreferredTimes, hasPreferred, noPreferredTimes, PreferredTimes, weekDays, windowText } from '@/lib/preferred';
 import { Crown, crownText, fetchPlayerCrowns, fetchPlayerOpen, formatTags, PlayerOpen } from '@/lib/play';
 import { nearbyPlayers } from '@/lib/sample-data';
 import { supabase } from '@/lib/supabase';
@@ -40,6 +39,9 @@ export default function PlayerScreen() {
   const [open, setOpen] = useState<PlayerOpen | null>(null);
   const [prefs, setPrefs] = useState<PreferredTimes>(noPreferredTimes);
   const [crowns, setCrowns] = useState<Crown[]>([]);
+  const [showTimes, setShowTimes] = useState(false);
+  const [counts, setCounts] = useState<FriendCounts | null>(null);
+  const [opponentCount, setOpponentCount] = useState<number | null>(null);
   const [stats, setStats] = useState<{ wins: number | null; losses: number | null; hidden: boolean } | null>(null);
 
   // Their record, unless they've hidden it in Settings.
@@ -68,7 +70,7 @@ export default function PlayerScreen() {
     .filter(
       (r) =>
         r.i_challenged &&
-        theirTeamIds.has(r.their_team_id) &&
+        ((r.their_team_id !== null && theirTeamIds.has(r.their_team_id)) || Boolean(r.players?.some((p) => !p.mine && p.id === id))) &&
         (r.status === 'pending' || (r.status === 'accepted' && !r.match_status) || (r.status === 'declined' && new Date(r.proposed_time).getTime() > Date.now())),
     )
     .slice(0, 3);
@@ -78,6 +80,8 @@ export default function PlayerScreen() {
     fetchPlayerOpen(demoMode, id).then(setOpen);
     fetchPreferredTimes(demoMode, id).then(setPrefs);
     fetchPlayerCrowns(demoMode, id).then(setCrowns);
+    fetchFriendCounts(demoMode, id).then(setCounts);
+    fetchPlayerOpponents(demoMode, id).then((o) => setOpponentCount(o.length));
   }, [demoMode, id]);
 
   useEffect(() => {
@@ -202,10 +206,15 @@ export default function PlayerScreen() {
             {[formatTags(open) ? `Open to ${formatTags(open)}` : null, !open.can_friend && relation === null ? `Not taking friend requests` : null].filter(Boolean).join(' · ')}
           </Body>
         ) : null}
-        {hasPreferred(prefs) ? (
-          <Body size={13} tone="muted">
-            Likes {preferredText(prefs)}
-          </Body>
+        {counts && !(counts.friends === 0 && counts.mutual === 0) ? (
+          <Link href={{ pathname: '/player-friends/[id]', params: { id: player.id, name: player.name } }} asChild>
+            <Pressable accessibilityRole="link" accessibilityLabel="See their friends">
+              <Body size={13} tone="muted">
+                {counts.friends} {counts.friends === 1 ? 'friend' : 'friends'}
+                {counts.mutual > 0 ? ` · ${counts.mutual} in common` : ''}
+              </Body>
+            </Pressable>
+          </Link>
         ) : null}
         {relation === 'friend' ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -239,11 +248,14 @@ export default function PlayerScreen() {
                 <Stat value={`${stats.wins ?? 0}–${stats.losses ?? 0}`} label="Record · history" />
               </Pressable>
             </Link>
-            <Stat
-              value={(stats.wins ?? 0) + (stats.losses ?? 0) > 0 ? `${Math.round(((stats.wins ?? 0) / ((stats.wins ?? 0) + (stats.losses ?? 0))) * 100)}%` : '–'}
-              label="Win rate"
-              tone="accent"
-            />
+            <View style={{ flex: 1 }}>
+              <Stat value={winRateText(stats.wins ?? 0, stats.losses ?? 0)} label={winRateLabel(stats.wins ?? 0, stats.losses ?? 0)} tone="accent" />
+            </View>
+            <Link href={{ pathname: '/opponents/[id]', params: { id: player.id, name: player.name } }} asChild>
+              <Pressable accessibilityRole="link" accessibilityLabel="Opponents. See who they have played" style={{ flex: 1 }}>
+                <Stat value={String(opponentCount ?? 0)} label="Opponents" />
+              </Pressable>
+            </Link>
           </View>
         )
       ) : null}
@@ -276,12 +288,33 @@ export default function PlayerScreen() {
         );
       })}
 
-      <ChallengeBuilder
-        playerId={player.id}
-        firstName={firstName}
-        blocked={Boolean(open && !open.can_challenge)}
-        blockedNote={open?.challenge_note}
-      />
+      {open && !open.can_challenge ? (
+        <Card style={{ padding: 14 }}>
+          <Body tone="muted">{open.challenge_note ?? `${firstName} isn't taking challenges right now.`}</Body>
+        </Card>
+      ) : (
+        <Link href={{ pathname: '/challenge/new', params: { opponent: player.id, opponentName: player.name } }} asChild>
+          <Button label={`Challenge ${firstName}`} size="lg" />
+        </Link>
+      )}
+
+      {hasPreferred(prefs) ? (
+        <View style={{ gap: 8 }}>
+          <Button label={showTimes ? 'Hide preferred times' : 'See preferred times'} variant="outline" onPress={() => setShowTimes(!showTimes)} />
+          {showTimes ? (
+            <Card style={{ padding: 14, gap: 6 }}>
+              {weekDays
+                .filter((d) => prefs[d.value] !== undefined)
+                .map((d) => (
+                  <View key={d.value} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Body weight="semibold">{d.long}</Body>
+                    <Body tone="muted">{windowText(prefs[d.value])}</Body>
+                  </View>
+                ))}
+            </Card>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={{ gap: 8 }}>
         <Button label={showTeams ? 'Hide player teams' : 'Player teams'} variant="outline" onPress={() => setShowTeams(!showTeams)} />

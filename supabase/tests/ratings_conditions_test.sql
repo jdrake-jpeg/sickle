@@ -41,6 +41,13 @@ insert into public.friendships (requester_id, addressee_id, status, accepted_at)
   ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000b2', 'accepted', now()),
   ('00000000-0000-0000-0000-0000000000b3', '00000000-0000-0000-0000-0000000000b4', 'accepted', now());
 
+-- Everyone on a challenge says OK (the game is on once they all have).
+create function pg_temp.everyone_in(p uuid) returns void language plpgsql security definer as $$
+begin
+  update public.challenge_players set response = 'in', responded_at = now() where challenge_id = p;
+  perform public.challenge_refresh_status(p);
+end $$;
+
 set role authenticated;
 
 -- Amy + Bo challenge Cy + Di; Cy accepts; Amy enters the score.
@@ -56,6 +63,7 @@ do $$ begin
 end $$;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000b3';
 select public.respond_to_challenge(pg_temp.r('ch'), true);
+select pg_temp.everyone_in(pg_temp.r('ch'));
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000b1';
 insert into rids select 'm', public.submit_match_result(pg_temp.r('ch'), '[[11,7],[9,11],[11,8]]');
 

@@ -1,10 +1,9 @@
-import { Link, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Link, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
 import { SickleSlice } from '@/components/SickleSlice';
 import { ShowMore, usePaged } from '@/components/ShowMore';
-import { TeamPick } from '@/components/TeamPick';
 import { VsLine } from '@/components/VsLine';
 import { Body, Button, Card, Display, Heading, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
@@ -31,6 +30,50 @@ import { useTheme } from '@/lib/theme';
 
 type Tab = 'incoming' | 'sent' | 'upcoming' | 'played';
 
+// Who is in, who hasn't answered, and who can't make it.
+function PlayerStatus({ row }: { row: ChallengeRow }) {
+  const players = (row.players ?? []).filter((p) => !p.placeholder || !p.creator);
+  const { colors } = useTheme();
+  if (players.length === 0) {
+    return (
+      <Body size={13} weight="bold" tone={row.status === 'declined' ? 'danger' : 'accent'}>
+        {row.status === 'declined' ? 'Declined' : 'Waiting for an answer'}
+      </Body>
+    );
+  }
+  const text = (r: string) => (r === 'in' ? 'In' : r === 'out' ? "Can't make it" : 'Waiting');
+  return (
+    <View style={{ gap: 4 }}>
+      {players.map((p) => (
+        <View key={p.id} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Body size={13}>{p.name}</Body>
+          <Body size={13} weight="bold" style={{ color: p.response === 'in' ? colors.accentText : p.response === 'out' ? colors.danger : colors.textMuted }}>
+            {p.creator ? 'Sent it' : p.placeholder ? 'Added by you' : text(p.response)}
+          </Body>
+        </View>
+      ))}
+      {row.open_opponent ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Body size={13}>Open spot</Body>
+          <Body size={13} weight="bold" tone="muted">
+            Not picked yet
+          </Body>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function ChallengeActions({ row, busy, onCancel }: { row: ChallengeRow; busy: boolean; onCancel: () => void }) {
+  if (row.status !== 'pending' && row.status !== 'declined') return null;
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      {row.can_edit ? <Button label="Edit" variant="outline" size="sm" onPress={() => router.push({ pathname: '/challenge/new', params: { edit: row.challenge_id } })} /> : null}
+      {row.status === 'pending' ? <Button label="Cancel challenge" variant="ghost" size="sm" disabled={busy} onPress={onCancel} /> : null}
+    </View>
+  );
+}
+
 export default function ChallengesScreen() {
   const { colors } = useTheme();
   const { demoMode } = useAuth();
@@ -42,7 +85,6 @@ export default function ChallengesScreen() {
   const [accepted, setAccepted] = useState<ChallengeRow | null>(null);
   const [myTeams, setMyTeams] = useState<TeamRow[]>([]);
   // For doubles: which of your teams plays, picked per challenge.
-  const [picks, setPicks] = useState<Record<string, string>>({});
   // For a challenge that needs a partner: who you pick, per challenge.
   const [partners, setPartners] = useState<Record<string, string | null>>({});
   const { options: partnerOptions, reload: reloadPartners } = usePeopleOptions();
@@ -66,17 +108,20 @@ export default function ChallengesScreen() {
   const all = rows ?? [];
   const teamPlayers = useTeamPlayers(
     demoMode,
-    all.flatMap((r) => [{ team_id: r.my_team_id }, { team_id: r.their_team_id }]),
+    all.flatMap((r) => [{ team_id: r.my_team_id }, ...(r.their_team_id ? [{ team_id: r.their_team_id }] : [])]),
   );
   const toConfirm = all.filter((r) => r.match_status === 'awaiting_confirmation' && r.awaiting_me);
-  const incoming = all.filter((r) => r.status === 'pending' && !r.i_challenged);
+  const incoming = all.filter((r) =>
+    r.my_response ? r.my_response === 'pending' && r.status === 'pending' && !r.i_created : r.status === 'pending' && !r.i_challenged,
+  );
+  // You said OK and the game is waiting on someone else.
+  const waitingOnOthers = all.filter((r) => !r.i_challenged && r.status === 'pending' && r.my_response === 'in');
   // Waiting for an answer, or declined and still in the future.
   const sent = all.filter((r) => r.i_challenged && (r.status === 'pending' || (r.status === 'declined' && new Date(r.proposed_time).getTime() > Date.now())));
   const myDoubles = myTeams.filter((t) => !t.is_singles);
   const isDoubles = (r: ChallengeRow) => myDoubles.some((t) => t.team_id === r.my_team_id);
-  const myTeamPlayers = useTeamPlayers(demoMode, myDoubles);
   // Only scheduled challenges. Games that were logged after the fact never show here.
-  const upcoming = all.filter((r) => r.status === 'accepted' && !r.logged && !r.match_id);
+  const upcoming = [...all.filter((r) => r.status === 'accepted' && !r.logged && !r.match_id), ...waitingOnOthers];
   const played = all.filter((r) => r.status === 'completed' || (r.match_status && r.match_status !== 'awaiting_confirmation'));
 
   const playedPaged = usePaged(played, 8);
@@ -104,10 +149,11 @@ export default function ChallengesScreen() {
       }
       return;
     }
-    const team = isDoubles(r) ? (picks[r.challenge_id] ?? r.my_team_id) : null;
-    if (await act(r.challenge_id, () => respondToChallenge(demoMode, r.challenge_id, true, team))) {
-      const chosen = myTeams.find((t) => t.team_id === team);
-      setAccepted(chosen ? { ...r, my_team_id: chosen.team_id, my_team_name: chosen.team_name } : r);
+    let status = '';
+    if (await act(r.challenge_id, async () => { status = await respondToChallenge(demoMode, r.challenge_id, true); })) {
+      // Only the last player to say OK makes it a game that is on.
+      if (status === 'accepted') setAccepted(r);
+      else Alert.alert('You are in', 'The game is on once everyone says OK. You can see who is left under Upcoming.');
     }
   };
 
@@ -176,7 +222,7 @@ export default function ChallengesScreen() {
       ))}
 
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Link href="/challenge/player" asChild>
+        <Link href="/challenge/new" asChild>
           <Button label="Challenge" style={{ flex: 1 }} />
         </Link>
         <Link href="/log-game" asChild>
@@ -205,7 +251,7 @@ export default function ChallengesScreen() {
               <View style={{ height: 5, backgroundColor: colors.danger }} />
               <View style={{ padding: 16, gap: 14 }}>
                 <Heading size={14} style={{ letterSpacing: 1 }}>
-                  YOU&apos;VE BEEN CHALLENGED
+                  {(r.players ?? []).some((p) => p.creator && p.mine) ? "YOU'RE INVITED TO PLAY" : "YOU'VE BEEN CHALLENGED"}
                 </Heading>
                 {r.needs_partner ? (
                   <Body size={13} tone="muted">
@@ -215,7 +261,7 @@ export default function ChallengesScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <View style={{ flex: 1 }}>
                     <Heading size={18}>{r.their_team_name}</Heading>
-                    {teamPlayers[r.their_team_id] ? (
+                    {r.their_team_id && teamPlayers[r.their_team_id] ? (
                       <Body size={12} tone="muted">
                         {teamPlayers[r.their_team_id]}
                       </Body>
@@ -248,22 +294,6 @@ export default function ChallengesScreen() {
                     exclude={[]}
                   />
                 ) : null}
-                {isDoubles(r) && myDoubles.length > 1 ? (
-                  <View style={{ gap: 8 }}>
-                    <Body size={13} weight="semibold" tone="muted">
-                      Which team plays?
-                    </Body>
-                    {myDoubles.map((t) => (
-                      <TeamPick
-                        key={t.team_id}
-                        name={t.team_name}
-                        players={myTeamPlayers[t.team_id]}
-                        selected={(picks[r.challenge_id] ?? r.my_team_id) === t.team_id}
-                        onPress={() => setPicks((p) => ({ ...p, [r.challenge_id]: t.team_id }))}
-                      />
-                    ))}
-                  </View>
-                ) : null}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <Button
                     label="Accept"
@@ -294,19 +324,13 @@ export default function ChallengesScreen() {
               <Body size={13} tone="muted">
                 {r.court_name} · {formatWhen(r.proposed_time)}
               </Body>
-              <Body size={13} weight="bold" tone={r.status === 'declined' ? 'danger' : 'accent'}>
-                {r.status === 'declined' ? 'Declined' : 'Waiting for an answer'}
-              </Body>
-              {r.status === 'pending' ? (
-                <Button
-                  label="Cancel challenge"
-                  variant="ghost"
-                  size="sm"
-                  disabled={busy === r.challenge_id}
-                  style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }}
-                  onPress={() => askCancel(r)}
-                />
+              <PlayerStatus row={r} />
+              {r.open_opponent ? (
+                <Body size={13} tone="muted">
+                  Nobody has this yet. Tap Edit to pick who you play.
+                </Body>
               ) : null}
+              <ChallengeActions row={r} busy={busy === r.challenge_id} onCancel={() => askCancel(r)} />
             </Card>
           ))}
         </>
@@ -325,8 +349,13 @@ export default function ChallengesScreen() {
                   {r.court_name} · {formatWhen(r.proposed_time)}
                 </Body>
               </View>
+              <PlayerStatus row={r} />
               <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                {r.i_challenged ? (
+                {r.status !== 'accepted' ? (
+                  <Body size={13} tone="muted" style={{ flex: 1 }}>
+                    Waiting on everyone to say OK.
+                  </Body>
+                ) : r.i_challenged ? (
                   <Link href={{ pathname: '/score/[challengeId]', params: { challengeId: r.challenge_id } }} asChild>
                     <Button label={r.challenger_needs_partner ? 'Pick partner and enter score' : 'Enter score'} style={{ flex: 1 }} />
                   </Link>
@@ -335,6 +364,7 @@ export default function ChallengesScreen() {
                     {r.their_team_name.split(' ')[0]} enters the score after you play.
                   </Body>
                 )}
+                {r.can_edit && r.i_created ? <Button label="Edit" variant="outline" onPress={() => router.push({ pathname: '/challenge/new', params: { edit: r.challenge_id } })} /> : null}
                 <Button label="Call off" variant="outline" disabled={busy === r.challenge_id} onPress={() => askCancel(r)} />
               </View>
             </Card>

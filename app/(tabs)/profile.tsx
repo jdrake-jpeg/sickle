@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/auth';
 import { initialsOf } from '@/lib/format';
 import { fetchUnreadCount } from '@/lib/chat';
 import { fetchFriends } from '@/lib/friends';
-import { fetchMyTeams, fetchRatingSummary, matchStatusText, RatingSummary, refreshChallenges, TeamRow, useChallenges } from '@/lib/matches';
+import { fetchMyTeams, fetchRatingSummary, matchStatusText, RatingSummary, refreshChallenges, TeamRow, useChallenges, winRateLabel, winRateText } from '@/lib/matches';
 import { applyRecordFilter, noRecordFilter, RecordFilter, recordFilterCount } from '@/lib/record';
 import { useProfile } from '@/lib/profile';
 import { formatScores } from '@/lib/scores';
@@ -51,7 +51,7 @@ export default function ProfileScreen() {
   const history = (challenges ?? []).filter((c) => c.match_id && (!c.is_test || profile?.is_test));
   // One record for everything. The filters change the record and the history together.
   const filtered = applyRecordFilter(
-    history.map((c) => ({ c, singles: singlesIds.has(c.my_team_id), opponent: c.their_team_id })),
+    history.map((c) => ({ c, singles: singlesIds.has(c.my_team_id), opponent: c.their_team_id ?? '' })),
     filter,
   ).map((x) => x.c);
   const confirmed = filtered.filter((c) => c.match_status === 'confirmed');
@@ -100,8 +100,14 @@ export default function ProfileScreen() {
               <Stat value={`${wins}–${losses}`} label="Record · history" tone="accent" />
             </Pressable>
           </Link>
-          <Stat value={confirmed.length ? `${Math.round((wins / confirmed.length) * 100)}%` : '–'} label="Win rate" />
-          <Stat value={String(opponents)} label="Opponents" />
+          <View style={{ flex: 1 }}>
+            <Stat value={winRateText(wins, losses)} label={winRateLabel(wins, losses)} />
+          </View>
+          <Link href={{ pathname: '/opponents/[id]', params: { id: profile?.id ?? '', name } }} asChild>
+            <Pressable accessibilityRole="link" accessibilityLabel="Opponents. See who you have played" style={{ flex: 1 }}>
+              <Stat value={String(opponents)} label="Opponents" />
+            </Pressable>
+          </Link>
         </View>
         <RecordFilters filter={filter} onChange={setFilter} />
       </View>
@@ -236,19 +242,14 @@ export default function ProfileScreen() {
         <ShowMore hasMore={paged.hasMore} remaining={paged.remaining} onPress={paged.more} />
       </View>
 
-      <Link href="/log-game" asChild>
-        <Button label="Log a game I already played" variant="outline" />
-      </Link>
-      <Link href="/people" asChild>
-        <Button label="People I added by name" variant="ghost" size="sm" />
-      </Link>
-      <Link href="/rules" asChild>
-        <Button label="Pickleball rules" variant="outline" />
-      </Link>
-      <Link href="/help" asChild>
-        <Button label="How Sickle works" variant="ghost" size="sm" />
-      </Link>
-
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Link href="/log-game" asChild>
+          <Button label="Log a game" variant="outline" style={{ flex: 1 }} />
+        </Link>
+        <Link href="/people" asChild>
+          <Button label="People I added" variant="outline" style={{ flex: 1 }} />
+        </Link>
+      </View>
     </Screen>
   );
 }

@@ -59,12 +59,13 @@ insert into public.blocks (blocker_id, blocked_id) values (auth.uid(), '00000000
 do $$ begin assert (select count(*) from public.my_friends()) = 0, 'block should end friendship'; end $$;
 select pg_temp.expect_error($$select public.add_friend('00000000-0000-0000-0000-0000000000a1')$$, 'You can''t friend this player');
 
--- Admin courts are approved right away; the same Google place can't be added twice.
+-- Admin courts wait for review too; the same Google place can't be added twice.
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000a1';
 create temp table fcourt (id uuid);
 grant all on fcourt to authenticated;
 insert into fcourt select public.submit_court('Friend Court', 44.5, -112.5, null, null, false, null, 'places/abc');
-do $$ begin assert (select status from public.courts where id = (select id from fcourt)) = 'approved'; end $$;
+do $$ begin assert (select status from public.courts where id = (select id from fcourt)) = 'pending'; end $$;
+select public.review_court((select id from fcourt), true);
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000a2';
 select pg_temp.expect_error($$select public.submit_court('Elsewhere', 45.5, -113.5, null, null, false, null, 'places/abc')$$, 'That court is already listed');
 

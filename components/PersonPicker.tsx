@@ -49,6 +49,10 @@ export function PersonPicker({
   options,
   onCreated,
   exclude = [],
+  allowAdd = true,
+  allowUnknown = false,
+  unknown = false,
+  onUnknown,
 }: {
   label: string;
   value: string | null;
@@ -56,6 +60,12 @@ export function PersonPicker({
   options: PersonOption[] | null;
   onCreated: () => Promise<void>;
   exclude?: (string | null)[];
+  // Someone not on the app can be added by name. Off for opponents, who have to be real players.
+  allowAdd?: boolean;
+  // "I don't know yet": fill the spot in later.
+  allowUnknown?: boolean;
+  unknown?: boolean;
+  onUnknown?: () => void;
 }) {
   const { demoMode } = useAuth();
   const { colors } = useTheme();
@@ -77,7 +87,7 @@ export function PersonPicker({
   }, [q, demoMode]);
 
   const list = (options ?? []).filter((o) => !exclude.includes(o.id) || o.id === value);
-  const selectedName = value ? (list.find((o) => o.id === value)?.name ?? (picked?.id === value ? picked.name : null) ?? 'Picked') : null;
+  const selectedName = unknown ? "I don't know yet" : value ? (list.find((o) => o.id === value)?.name ?? (picked?.id === value ? picked.name : null) ?? 'Picked') : null;
 
   const choose = (id: string, nm: string) => {
     setPicked({ id, name: nm });
@@ -143,6 +153,20 @@ export function PersonPicker({
       {open ? (
         <View style={{ borderRadius: 12, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surface, padding: 8, gap: 6 }}>
           <SearchField label="Find someone" placeholder="Name or username" value={q} onChangeText={setQ} style={{ height: 40 }} />
+          {allowUnknown ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                onUnknown?.();
+                setOpen(false);
+                setQ('');
+              }}
+              style={{ paddingVertical: 10, paddingHorizontal: 12 }}>
+              <Body weight="semibold" style={{ color: colors.accentText }}>
+                I don't know yet
+              </Body>
+            </Pressable>
+          ) : null}
           <ScrollView nestedScrollEnabled style={{ maxHeight: 240 }} keyboardShouldPersistTaps="handled">
             {searching ? (
               found.filter((p) => !exclude.includes(p.id)).length === 0 ? (
@@ -168,7 +192,7 @@ export function PersonPicker({
               </>
             )}
           </ScrollView>
-          {adding ? (
+          {!allowAdd ? null : adding ? (
             <View style={{ gap: 6 }}>
               <Field label="Their name" placeholder="Jordan Lee" value={name} onChangeText={setName} maxLength={40} autoCapitalize="words" />
               <Button label={busy ? 'Adding…' : 'Add and pick'} size="sm" disabled={busy || !name.trim()} onPress={add} />
@@ -180,7 +204,7 @@ export function PersonPicker({
               </Body>
             </Pressable>
           )}
-          {value ? <Button label="Clear" variant="ghost" size="sm" onPress={() => { onChange(null); setOpen(false); }} /> : null}
+          {value || unknown ? <Button label="Clear" variant="ghost" size="sm" onPress={() => { onChange(null); setOpen(false); }} /> : null}
         </View>
       ) : null}
     </View>

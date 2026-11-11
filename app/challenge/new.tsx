@@ -1,214 +1,220 @@
-import { Link, router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Pressable, View } from 'react-native';
 
-import { ShowMore, usePaged } from '@/components/ShowMore';
-import { TeamPick } from '@/components/TeamPick';
+import { CourtPicker } from '@/components/CourtPicker';
+import { PersonPicker, usePeopleOptions } from '@/components/PersonPicker';
 import { nextHalfHour, TimeField, whenText } from '@/components/TimeWheel';
-import { VsLine } from '@/components/VsLine';
 import { Body, Button, Card, Chip, Heading, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { courtsNear, useCourts, widerMiles } from '@/lib/courts';
-import { formatMiles } from '@/lib/format';
-import { getCurrentLocation, getLocationIfAllowed, LatLng } from '@/lib/location';
+import { createGameChallenge, editChallenge, fetchTeamDetail, useChallenges } from '@/lib/matches';
 import { useProfile } from '@/lib/profile';
-import { fetchMyTeams, fetchTeamDetail, sendChallenge, sendChallengeToPlayer, TeamRow, useTeamPlayers } from '@/lib/matches';
-import { fetchPreferredTimesFor, hasPreferred, nextWindows, preferredText, PreferredTimes } from '@/lib/preferred';
 import { BestOf, matchLengthLabel } from '@/lib/scores';
+import { useTheme } from '@/lib/theme';
 
-// Challenge a team: pick which of your teams plays, where, and when.
+type Kind = 'singles' | 'doubles';
+// A spot is a picked player, "I don't know yet", or not decided.
+type Spot = { id: string; name: string } | 'unknown' | null;
+
+// The challenge builder. Singles or doubles first, then who plays, then where
+// and when. Anyone on Sickle can be picked, and any spot can be left for later.
+// With ?edit=<id> it changes a challenge you already sent.
 export default function NewChallengeScreen() {
-  const { team, teamName, court, myTeam: myTeamParam, bestOf: bestOfParam, player, needsPartner } = useLocalSearchParams<{
-    team: string;
-    teamName?: string;
+  const { edit, opponent, opponentName, team, court } = useLocalSearchParams<{
+    edit?: string;
+    opponent?: string;
+    opponentName?: string;
+    team?: string;
     court?: string;
-    myTeam?: string;
-    bestOf?: string;
-    // A doubles challenge to one player with no team: they pick a partner when they accept.
-    player?: string;
-    needsPartner?: string;
   }>();
-  const toPlayer = needsPartner === '1' && Boolean(player);
   const { demoMode } = useAuth();
   const { profile } = useProfile();
-  const { courts } = useCourts();
-  const [teams, setTeams] = useState<TeamRow[] | null>(null);
-  const [myTeam, setMyTeam] = useState<string | null>(myTeamParam ?? null);
-  // Singles teams only play singles teams, doubles only doubles.
-  const [singles, setSingles] = useState<boolean | null>(null);
+  const { colors } = useTheme();
+  const { options, reload } = usePeopleOptions();
+  const rows = useChallenges(demoMode);
+  const editing = edit ? (rows ?? []).find((r) => r.challenge_id === edit) : undefined;
+
+  const [kind, setKind] = useState<Kind | null>(null);
+  const [partner, setPartner] = useState<Spot>(null);
+  const [opp1, setOpp1] = useState<Spot>(opponent ? { id: opponent, name: opponentName || 'Player' } : null);
+  const [opp2, setOpp2] = useState<Spot>(null);
   const [courtId, setCourtId] = useState<string | null>(court ?? null);
   const [when, setWhen] = useState(nextHalfHour);
-  // When the players on the other team like to play.
-  const [theirPrefs, setTheirPrefs] = useState<{ name: string; prefs: PreferredTimes }[]>([]);
-  const [bestOf, setBestOf] = useState<BestOf>(bestOfParam === '1' ? 1 : 3);
+  const [bestOf, setBestOf] = useState<BestOf>(3);
   const [busy, setBusy] = useState(false);
-  const [here, setHere] = useState<LatLng | null>(null);
-  // Courts within 25 miles, nearest first. The one you came from is always in the list.
-  // Without a location only that one shows.
-  const pool = courtsNear(here, courts ?? []).filter((c) => c.id === court || (here !== null && c.miles !== null && c.miles <= widerMiles));
-  const paged = usePaged(pool, 5, 5);
-  // The court you picked stays on screen even if it's further down the list.
-  const picked = pool.find((c) => c.id === courtId);
-  const sorted = picked && !paged.shown.some((c) => c.id === picked.id) ? [picked, ...paged.shown] : paged.shown;
+  const filled = useRef(false);
 
+  // Coming from a team page: that team is who you are challenging.
   useEffect(() => {
-    getLocationIfAllowed().then(setHere);
-  }, []);
+    if (!team || edit) return;
+    fetchTeamDetail(demoMode, team).then((d) => {
+      if (!d) return;
+      const others = d.members.filter((m) => m.id !== profile?.id).map((m) => ({ id: m.id, name: m.name }));
+      setKind(d.is_singles ? 'singles' : 'doubles');
+      setOpp1(others[0] ?? null);
+      setOpp2(d.is_singles ? null : (others[1] ?? null));
+    });
+  }, [demoMode, team, edit, profile?.id]);
 
-  const allowLocation = async () => {
-    try {
-      setHere(await getCurrentLocation());
-    } catch (e) {
-      Alert.alert('Location', e instanceof Error ? e.message : 'Something went wrong.');
-    }
+  // Editing: start from what was sent.
+  useEffect(() => {
+    if (!editing || filled.current) return;
+    filled.current = true;
+    const players = editing.players ?? [];
+    const doubles = (editing.my_team_name + editing.their_team_name).includes(' + ') || players.length > 2;
+    const mine = players.filter((p) => p.mine && !p.creator);
+    const theirs = players.filter((p) => !p.mine);
+    const spot = (p?: { id: string; name: string }): Spot => (p ? { id: p.id, name: p.name } : 'unknown');
+    setKind(doubles ? 'doubles' : 'singles');
+    setPartner(doubles ? spot(mine[0]) : null);
+    setOpp1(spot(theirs[0]));
+    setOpp2(doubles ? (theirs[0] ? spot(theirs[1]) : null) : null);
+    setCourtId(editing.court_id);
+    setWhen(new Date(editing.proposed_time));
+    setBestOf(editing.best_of === 1 ? 1 : 3);
+  }, [editing]);
+
+  const doubles = kind === 'doubles';
+  const ids = (...s: Spot[]) => s.map((x) => (x && x !== 'unknown' ? x.id : null));
+  const pickerFor = (label: string, spot: Spot, set: (s: Spot) => void, others: Spot[], opts: { allowAdd?: boolean } = {}) => {
+    const value = spot && spot !== 'unknown' ? spot.id : null;
+    return (
+      <PersonPicker
+        label={label}
+        value={value}
+        unknown={spot === 'unknown'}
+        allowUnknown
+        allowAdd={opts.allowAdd}
+        options={options}
+        onCreated={reload}
+        exclude={[...ids(...others), profile?.id ?? null]}
+        onChange={(id, name) => set(id ? { id, name: name ?? 'Player' } : null)}
+        onUnknown={() => set('unknown')}
+      />
+    );
   };
 
-  // Pick the closest court to start with, unless one was passed in.
-  useEffect(() => {
-    if (!courtId && here && pool.length > 0) setCourtId(pool[0].id);
-    // pool is rebuilt every render; the court and where you are decide it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courtId, here, courts]);
-
-  useEffect(() => {
-    fetchTeamDetail(demoMode, team).then(async (d) => {
-      // A player with no doubles team is reached through their singles team, but the game is doubles.
-      setSingles(toPlayer ? false : Boolean(d?.is_singles));
-      const others = (d?.members ?? []).filter((m) => m.id !== profile?.id);
-      const found = await fetchPreferredTimesFor(demoMode, others.map((m) => m.id));
-      setTheirPrefs(others.map((m) => ({ name: m.name.split(' ')[0], prefs: found[m.id] })).filter((x) => hasPreferred(x.prefs)));
-    });
-  }, [demoMode, team, profile?.id, toPlayer]);
-
-  useEffect(() => {
-    fetchMyTeams(demoMode).then(setTeams);
-  }, [demoMode]);
-
-  // Only your teams of the same kind can play: your singles team against a
-  // singles team, a doubles team against a doubles team.
-  // A doubles challenge to one player can also go out with your singles team standing in for a partner you haven't picked yet.
-  const playable = singles === null || teams === null ? null : toPlayer ? teams : teams.filter((t) => Boolean(t.is_singles) === singles);
-
-  useEffect(() => {
-    if (playable && playable.length === 1) setMyTeam(playable[0].team_id);
-  }, [playable]);
-
-  const players = useTeamPlayers(demoMode, [...(toPlayer ? [] : [{ team_id: team }]), ...(playable ?? [])]);
-  const myChosen = (playable ?? []).find((t) => t.team_id === myTeam);
-
+  const opp1Chosen = opp1 !== null;
+  const opp2Needed = doubles && opp1 !== null && opp1 !== 'unknown';
+  const playersDone = kind !== null && opp1Chosen && (!doubles || (partner !== null && (!opp2Needed || opp2 !== null)));
   const inPast = when.getTime() < Date.now();
-  const ready = myTeam && courtId && !inPast;
+  const ready = playersDone && Boolean(courtId) && !inPast;
 
   const send = async () => {
-    if (!ready) return;
+    if (!ready || !kind || !courtId) return;
     setBusy(true);
     try {
-      if (toPlayer && player) await sendChallengeToPlayer(demoMode, myTeam, player, courtId, when, bestOf);
-      else await sendChallenge(demoMode, myTeam, team, courtId, when, bestOf);
-      Alert.alert('Challenge sent', `${teamName || 'They'} can accept or decline. Track it under Challenges.`);
+      const [p, o1, o2] = ids(partner, opp1, opp2);
+      const draft = { kind, partner: p, opponent1: o1, opponent2: opp2Needed ? o2 : null, court: courtId, when, bestOf };
+      if (editing) {
+        await editChallenge(demoMode, editing.challenge_id, draft);
+        Alert.alert('Challenge updated', 'Everyone who needs to is asked again.');
+      } else {
+        await createGameChallenge(demoMode, draft);
+        Alert.alert('Challenge sent', 'Everyone you picked gets it and says if they are in. Track it under Challenges.');
+      }
       router.back();
     } catch (e) {
-      Alert.alert("Couldn't send it", e instanceof Error ? e.message : 'Try again.');
+      Alert.alert(editing ? "Couldn't update it" : "Couldn't send it", e instanceof Error ? e.message : 'Try again.');
     } finally {
       setBusy(false);
     }
   };
 
-  if (playable && playable.length === 0) {
+  const big = (label: string, sub: string, value: Kind) => {
+    const on = kind === value;
     return (
-      <Screen>
-        <Card style={{ padding: 16, gap: 10 }}>
-          <Heading>{singles ? "SINGLES ISN'T READY" : 'YOU NEED A TEAM'}</Heading>
-          <Body tone="muted">
-            {singles ? 'Your singles team is still loading. Close and reopen the app.' : 'Doubles needs a team. Make one with a friend, then come back.'}
-          </Body>
-          {singles ? null : (
-            <Link href="/team/new" asChild>
-              <Button label="Find a partner" />
-            </Link>
-          )}
-        </Card>
-      </Screen>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ selected: on }}
+        onPress={() => setKind(value)}
+        style={{
+          flex: 1,
+          paddingVertical: 18,
+          borderRadius: 14,
+          borderWidth: 2,
+          borderColor: on ? colors.inverse : colors.borderStrong,
+          backgroundColor: on ? colors.inverse : colors.surface,
+          alignItems: 'center',
+          gap: 2,
+        }}>
+        <Heading size={20} style={{ color: on ? colors.surface : colors.text }}>
+          {label}
+        </Heading>
+        <Body size={12} style={{ color: on ? colors.surface : colors.textMuted }}>
+          {sub}
+        </Body>
+      </Pressable>
     );
-  }
+  };
 
   return (
     <Screen>
-      <Heading size={22}>CHALLENGE {(teamName || 'this team').toUpperCase()}</Heading>
-      <Body tone="muted">Ranked. Counts once both sides confirm the score.</Body>
-
-      <Card style={{ padding: 14 }}>
-        <VsLine you={singles ? 'You' : (myChosen?.team_name ?? 'Your team')} them={toPlayer ? `${teamName || 'They'} + partner` : teamName || 'This team'} size={22} />
-      </Card>
-
-      <View style={{ gap: 8 }}>
-        <Body weight="semibold">Match length</Body>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {([1, 3] as BestOf[]).map((n) => (
-            <Chip key={n} label={matchLengthLabel(n)} selected={bestOf === n} onPress={() => setBestOf(n)} />
-          ))}
-        </View>
-        <Body size={13} tone="muted">
-          {bestOf === 1 ? 'One game to 11, win by 2.' : 'First to win 2 games. Each game to 11, win by 2.'}
-        </Body>
-      </View>
-
-      {singles ? null : (
-        <View style={{ gap: 8 }}>
-          <Body weight="semibold">Your team</Body>
-          {(playable ?? []).map((t) => (
-            <TeamPick
-              key={t.team_id}
-              name={t.is_singles ? 'Not sure yet' : t.team_name}
-              players={t.is_singles ? 'You pick your partner when you enter the score' : players[t.team_id]}
-              selected={myTeam === t.team_id}
-              onPress={() => setMyTeam(t.team_id)}
-            />
-          ))}
-        </View>
-      )}
-
-      <View style={{ gap: 8 }}>
-        <Body weight="semibold">Court</Body>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {sorted.map((c) => (
-            <Chip
-              key={c.id}
-              label={c.miles !== null ? `${c.name} · ${formatMiles(Math.round(c.miles * 10) / 10)}` : c.name}
-              selected={courtId === c.id}
-              onPress={() => setCourtId(c.id)}
-            />
-          ))}
-        </View>
-        {here === null && pool.length === 0 ? (
-          <Button label="Use my location to see courts" variant="outline" size="sm" onPress={allowLocation} />
-        ) : null}
-        <ShowMore hasMore={paged.hasMore} remaining={paged.remaining} onPress={paged.more} />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-          <Link href="/court/new" asChild>
-            <Button label="Court not listed? Add it" variant="ghost" size="sm" />
-          </Link>
-        </View>
-      </View>
-
-      <View style={{ gap: 8 }}>
-        <Body weight="semibold">When</Body>
-        {theirPrefs.map((x) => (
-          <View key={x.name} style={{ gap: 6 }}>
-            <Body size={13} tone="muted">
-              {x.name} likes {preferredText(x.prefs)}
-            </Body>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {nextWindows(x.prefs).map((d) => (
-                <Chip key={d.getTime()} label={whenText(d)} selected={Math.abs(when.getTime() - d.getTime()) < 60_000} onPress={() => setWhen(d)} />
-              ))}
+      <Stack.Screen options={{ title: editing ? 'Edit challenge' : 'Challenge a player' }} />
+      {edit && !editing ? (
+        <Card style={{ padding: 16 }}>
+          <Body tone="muted">Loading your challenge…</Body>
+        </Card>
+      ) : (
+        <>
+          <View style={{ gap: 8 }}>
+            <Heading size={18}>WHAT ARE YOU PLAYING?</Heading>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {big('SINGLES', '1 vs 1', 'singles')}
+              {big('DOUBLES', '2 vs 2', 'doubles')}
             </View>
           </View>
-        ))}
-        <TimeField title="Pick a time" value={when} display={whenText(when)} onChange={setWhen} />
-      </View>
 
-      <Button label={busy ? 'Sending…' : 'Send challenge'} size="lg" disabled={busy || !ready} onPress={send} />
+          {kind ? (
+            <View style={{ gap: 12 }}>
+              <Heading size={18}>WHO'S PLAYING?</Heading>
+              {doubles ? pickerFor('Your partner', partner, setPartner, [opp1, opp2]) : null}
+              {pickerFor(doubles ? 'First opponent' : 'Your opponent', opp1, (s) => { setOpp1(s); if (s === 'unknown' || s === null) setOpp2(null); }, [partner, opp2], { allowAdd: false })}
+              {doubles ? (
+                opp2Needed ? (
+                  pickerFor('Second opponent', opp2, setOpp2, [partner, opp1], { allowAdd: false })
+                ) : (
+                  <Body size={13} tone="muted">
+                    Pick your first opponent to choose the second.
+                  </Body>
+                )
+              ) : null}
+              <Body size={13} tone="muted">
+                Anyone on Sickle works, friends or not. Not sure yet? Pick "I don't know yet" and fill it in later with Edit.
+              </Body>
+            </View>
+          ) : null}
+
+          {playersDone ? (
+            <>
+              <View style={{ gap: 8 }}>
+                <Body weight="semibold">Match length</Body>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {([1, 3] as BestOf[]).map((n) => (
+                    <Chip key={n} label={matchLengthLabel(n)} selected={bestOf === n} onPress={() => setBestOf(n)} />
+                  ))}
+                </View>
+              </View>
+
+              <CourtPicker value={courtId} onChange={setCourtId} />
+
+              <View style={{ gap: 8 }}>
+                <Body weight="semibold">When</Body>
+                <TimeField title="Pick a time" value={when} display={whenText(when)} onChange={setWhen} />
+              </View>
+
+              {editing ? (
+                <Card style={{ padding: 12 }}>
+                  <Body size={13} tone="muted">
+                    Swapping a player only asks the new player. A new time, court or length asks everyone again.
+                  </Body>
+                </Card>
+              ) : null}
+              <Button label={busy ? 'Sending…' : editing ? 'Save changes' : 'Send challenge'} size="lg" disabled={busy || !ready} onPress={send} />
+            </>
+          ) : null}
+        </>
+      )}
     </Screen>
   );
 }

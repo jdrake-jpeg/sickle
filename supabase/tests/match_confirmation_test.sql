@@ -42,6 +42,13 @@ insert into public.friendships (requester_id, addressee_id, status, accepted_at)
   ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000b', 'accepted', now()),
   ('00000000-0000-0000-0000-00000000000c', '00000000-0000-0000-0000-00000000000d', 'accepted', now());
 
+-- Everyone on a challenge says OK (the game is on once they all have).
+create function pg_temp.everyone_in(p uuid) returns void language plpgsql security definer as $$
+begin
+  update public.challenge_players set response = 'in', responded_at = now() where challenge_id = p;
+  perform public.challenge_refresh_status(p);
+end $$;
+
 set role authenticated;
 
 -- Teams: Drake + Jack, Ty + Ryan.
@@ -55,10 +62,11 @@ insert into ids select 'c1', public.send_challenge(pg_temp.id('tr'), pg_temp.id(
 
 -- No score before the challenge is accepted, and the challenger can't accept it.
 select pg_temp.expect_error($$select public.submit_match_result(pg_temp.id('c1'), '[[11,7],[11,8]]')$$, 'Scores can only be entered');
-select pg_temp.expect_error($$select public.respond_to_challenge(pg_temp.id('c1'), true)$$, 'Only the challenged team');
+select pg_temp.expect_error($$select public.respond_to_challenge(pg_temp.id('c1'), true)$$, 'You sent this challenge');
 
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
 select public.respond_to_challenge(pg_temp.id('c1'), true);
+select pg_temp.everyone_in(pg_temp.id('c1'));
 
 -- An outsider cannot enter the score.
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000e';
@@ -120,6 +128,7 @@ select pg_temp.expect_error($$select public.confirm_match_result(pg_temp.id('m1'
 insert into ids select 'c2', public.send_challenge(pg_temp.id('dj'), pg_temp.id('tr'), '00000000-0000-0000-0000-0000000000c1', now() + interval '2 hours');
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000d';
 select public.respond_to_challenge(pg_temp.id('c2'), true);
+select pg_temp.everyone_in(pg_temp.id('c2'));
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
 insert into ids select 'm2', public.submit_match_result(pg_temp.id('c2'), '[[11,4],[11,6]]');
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
@@ -149,6 +158,7 @@ set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
 insert into ids select 'c3', public.send_challenge(pg_temp.id('dj'), pg_temp.id('tr'), '00000000-0000-0000-0000-0000000000c1', now() + interval '1 hour');
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
 select public.respond_to_challenge(pg_temp.id('c3'), true);
+select pg_temp.everyone_in(pg_temp.id('c3'));
 insert into ids select 'm3', public.submit_match_result(pg_temp.id('c3'), '[[11,2],[11,3]]');
 reset role;
 update public.matches set updated_at = now() - interval '73 hours' where id = pg_temp.id('m3');

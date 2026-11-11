@@ -15,6 +15,13 @@ create temp table ids (k text primary key, v uuid);
 grant all on ids to authenticated;
 create function pg_temp.id(p_k text) returns uuid language sql as $$ select v from ids where k = p_k $$;
 
+-- Everyone on a challenge says OK (the game is on once they all have).
+create function pg_temp.everyone_in(p uuid) returns void language plpgsql security definer as $$
+begin
+  update public.challenge_players set response = 'in', responded_at = now() where challenge_id = p;
+  perform public.challenge_refresh_status(p);
+end $$;
+
 set role authenticated;
 
 -- Friend request -> friends notification.
@@ -48,6 +55,7 @@ do $$ begin
   assert (select body from public.my_notifications() where category = 'challenges') like 'Notif One challenged you at Notif Court, one game', 'challenge body';
 end $$;
 select public.respond_to_challenge(pg_temp.id('c1'), true);
+select pg_temp.everyone_in(pg_temp.id('c1'));
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000bb01';
 do $$ begin assert (select count(*) from public.my_notifications() where title = 'Challenge accepted') = 1, 'accepted'; end $$;
 insert into ids select 'm1', public.submit_match_result(pg_temp.id('c1'), '[[11,4]]');

@@ -200,10 +200,16 @@ export default function SettingsScreen() {
         </View>
       ) : null}
       <View style={{ gap: 8 }}>
-        <Heading>ABOUT</Heading>
+        <Heading>HELP</Heading>
         <Link href="/help" asChild>
           <Button label="How Sickle works" variant="outline" />
         </Link>
+        <Link href="/rules" asChild>
+          <Button label="Pickleball rules" variant="outline" />
+        </Link>
+      </View>
+      <View style={{ gap: 8 }}>
+        <Heading>ABOUT</Heading>
         <Link href="/privacy" asChild>
           <Button label="Privacy policy" variant="outline" />
         </Link>

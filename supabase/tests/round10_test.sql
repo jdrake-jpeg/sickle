@@ -45,6 +45,13 @@ begin
   raise exception 'Expected error "%" but the statement succeeded: %', p_expected, p_sql;
 end $$;
 
+-- Everyone on a challenge says OK (the game is on once they all have).
+create function pg_temp.everyone_in(p uuid) returns void language plpgsql security definer as $$
+begin
+  update public.challenge_players set response = 'in', responded_at = now() where challenge_id = p;
+  perform public.challenge_refresh_status(p);
+end $$;
+
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000010a';
 
@@ -101,6 +108,7 @@ begin
 end $$;
 select pg_temp.expect_error(format($$select public.set_challenge_partner(%L, %L)$$, pg_temp.id('c1'), '00000000-0000-0000-0000-00000000010c'), 'Only the player who sent it');
 insert into ids values ('dteam', public.accept_challenge_with_partner(pg_temp.id('c1'), '00000000-0000-0000-0000-00000000010c'));
+select pg_temp.everyone_in(pg_temp.id('c1'));
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000010a';
 select pg_temp.expect_error(format($$select public.submit_match_result(%L, '[[11,5]]'::jsonb, now(), null)$$, pg_temp.id('c1')), 'Pick your partner');
 select pg_temp.expect_error(format($$select public.set_challenge_partner(%L, %L)$$, pg_temp.id('c1'), '00000000-0000-0000-0000-0000000010f1'), 'Your partner has to be');

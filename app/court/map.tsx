@@ -7,13 +7,19 @@ import { Body, Button, ListRow, Screen, SearchField } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { addMapCourt, courtMeta, GoogleCourt, searchCourts, useCourts, widerMiles } from '@/lib/courts';
 import { getCurrentLocation, getLocationIfAllowed, LatLng } from '@/lib/location';
+import { deliverCourtPick } from '@/lib/court-pick';
 import { useMappedCourts } from '@/lib/nearby-courts';
 
 // The courts map, as big as the screen. Red pins are every Sickle court, so
 // you can pan anywhere. Gray pins are mapped courts within 25 miles of you that
 // you can add with one tap. Opened from a court's page, it starts on that court.
 export default function CourtMapScreen() {
-  const { lat, lng } = useLocalSearchParams<{ lat?: string; lng?: string }>();
+  const { lat, lng, pick } = useLocalSearchParams<{ lat?: string; lng?: string; pick?: string }>();
+  const picking = pick === '1';
+  const choose = (id: string) => {
+    deliverCourtPick(id);
+    router.back();
+  };
   const focused: LatLng | null = lat && lng && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) ? { lat: Number(lat), lng: Number(lng) } : null;
   const { demoMode } = useAuth();
   const { courts, reload } = useCourts();
@@ -43,7 +49,7 @@ export default function CourtMapScreen() {
   };
 
   const add = (g: GoogleCourt) =>
-    Alert.alert(`Add ${g.name} to Sickle?`, 'It goes live right away, so you can challenge people and play ranked matches there.', [
+    Alert.alert(`Add ${g.name} to Sickle?`, picking ? 'It goes live right away and gets picked for your game.' : 'It goes live right away, so you can challenge people and play ranked matches there.', [
       { text: 'Not now', style: 'cancel' },
       {
         text: 'Add it',
@@ -52,6 +58,7 @@ export default function CourtMapScreen() {
             const id = await addMapCourt(demoMode, g);
             await reload();
             mapped.remove(g.place_id);
+            if (picking) return choose(id);
             router.replace(`/court/${id}`);
           } catch (e) {
             Alert.alert("Couldn't add it", e instanceof Error ? e.message : 'Try again.');
@@ -62,13 +69,14 @@ export default function CourtMapScreen() {
 
   return (
     <Screen scroll={false}>
-      <Stack.Screen options={{ title: 'Courts map' }} />
+      <Stack.Screen options={{ title: picking ? 'Pick a court' : 'Courts map' }} />
       <SearchField label="Find a court on the map" placeholder="Court name or street" value={query} onChangeText={setQuery} />
       {results.map((c) => (
         <Pressable
           key={c.id}
           accessibilityRole="button"
           onPress={() => {
+            if (picking) return choose(c.id);
             setLook({ lat: c.lat, lng: c.lng });
             setQuery('');
           }}>
@@ -80,7 +88,7 @@ export default function CourtMapScreen() {
         center={look ?? here}
         showsUserLocation={Boolean(here)}
         courts={(courts ?? []).map((c) => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, subtitle: courtMeta(c) }))}
-        onCourtPress={(id) => router.push(`/court/${id}`)}
+        onCourtPress={(id) => (picking ? choose(id) : router.push(`/court/${id}`))}
         suggestions={suggestions.map((g) => ({ id: g.place_id, name: g.name, lat: g.lat, lng: g.lng }))}
         onSuggestionPress={(placeId) => {
           const g = suggestions.find((x) => x.place_id === placeId);
@@ -90,7 +98,7 @@ export default function CourtMapScreen() {
       {here ? null : <Button label="Use my location" variant="outline" size="sm" onPress={allowLocation} />}
       <View style={{ gap: 8 }}>
         <Body size={13} tone="muted">
-          Red pins are Sickle courts. Gray pins are mapped courts near you that you can add. Tap a pin, then its name.
+          Red pins are Sickle courts. Gray pins are mapped courts near you that you can add. Tap a pin, then its name{picking ? ' to pick it' : ''}.
         </Body>
         <Link href="/court/new" asChild>
           <Button label="Add a court that isn't on the map" variant="outline" size="sm" />

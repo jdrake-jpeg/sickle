@@ -17,7 +17,8 @@ export type ChallengeRow = {
   i_challenged: boolean;
   my_team_id: string;
   my_team_name: string;
-  their_team_id: string;
+  // Empty while the opponent is still an open spot.
+  their_team_id: string | null;
   their_team_name: string;
   court_id: string;
   court_name: string;
@@ -41,7 +42,18 @@ export type ChallengeRow = {
   is_test?: boolean;
   // A game that was logged after it happened, with no challenge.
   logged?: boolean;
+  // Round 11b: every player says OK for themselves.
+  i_created?: boolean;
+  my_response?: ChallengeResponse;
+  players?: ChallengePlayer[];
+  // The sender left the opponent for later.
+  open_opponent?: boolean;
+  // The sender can still change who, when and where.
+  can_edit?: boolean;
 };
+
+export type ChallengeResponse = 'pending' | 'in' | 'out';
+export type ChallengePlayer = { id: string; name: string; mine: boolean; response: ChallengeResponse; creator: boolean; placeholder: boolean };
 
 export const bestOfOf = (row: Pick<ChallengeRow, 'best_of'>): BestOf => (row.best_of === 1 ? 1 : 3);
 
@@ -145,7 +157,8 @@ export function useChallengePolling(demoMode: boolean, signedInAs: string | unde
 
 // Things waiting on you: challenges to answer and scores to confirm.
 export function needsMe(row: ChallengeRow) {
-  return (row.status === 'pending' && !row.i_challenged) || (row.match_status === 'awaiting_confirmation' && row.awaiting_me);
+  const asked = row.my_response ? row.my_response === 'pending' && row.status === 'pending' && !row.i_created : row.status === 'pending' && !row.i_challenged;
+  return asked || (row.match_status === 'awaiting_confirmation' && row.awaiting_me);
 }
 
 // Demo mode edits the sample list so buttons visibly do something.
@@ -162,9 +175,13 @@ async function call(fn: string, args: Record<string, unknown>) {
 }
 
 // teamId: for a doubles challenge, which of your teams plays.
-export async function respondToChallenge(demoMode: boolean, id: string, accept: boolean, teamId?: string | null) {
-  if (demoMode || !supabase) return demoUpdate(id, { status: accept ? 'accepted' : 'declined' });
-  await call('respond_to_challenge', { p_challenge: id, p_accept: accept, ...(accept && teamId ? { p_team: teamId } : {}) });
+// Returns the challenge's status after your answer: it is only 'accepted' once everyone is in.
+export async function respondToChallenge(demoMode: boolean, id: string, accept: boolean, teamId?: string | null): Promise<string> {
+  if (demoMode || !supabase) {
+    demoUpdate(id, { status: accept ? 'accepted' : 'declined' });
+    return accept ? 'accepted' : 'declined';
+  }
+  return (await call('respond_to_challenge', { p_challenge: id, p_accept: accept, ...(accept && teamId ? { p_team: teamId } : {}) })) as string;
 }
 
 export async function cancelChallenge(demoMode: boolean, id: string) {
@@ -648,3 +665,71 @@ export async function searchPlayers(demoMode: boolean, query: string): Promise<F
   const { data } = await supabase.rpc('search_players', { p_query: q });
   return ((data ?? []) as { profile_id: string; display_name: string; username: string }[]).map((p) => ({ id: p.profile_id, name: p.display_name, username: p.username }));
 }
+
+// ---------------------------------------------------------------------------
+// Round 11b: one challenge builder for singles and doubles, edits, profiles
+// ---------------------------------------------------------------------------
+
+export type ChallengeDraft = {
+  kind: 'singles' | 'doubles';
+  // null = "I don't know yet"
+  partner: string | null;
+  opponent1: string | null;
+  opponent2: string | null;
+  court: string;
+  when: Date;
+  bestOf: BestOf;
+};
+
+const draftArgs = (d: ChallengeDraft) => ({
+  p_kind: d.kind,
+  p_partner: d.kind === 'doubles' ? d.partner : null,
+  p_opp1: d.opponent1,
+  p_opp2: d.kind === 'doubles' ? d.opponent2 : null,
+  p_court: d.court,
+  p_time: d.when.toISOString(),
+  p_best_of: d.bestOf,
+});
+
+export async function createGameChallenge(demoMode: boolean, d: ChallengeDraft): Promise<void> {
+  if (demoMode || !supabase) return;
+  await call('create_game_challenge', draftArgs(d));
+}
+
+export async function editChallenge(demoMode: boolean, id: string, d: ChallengeDraft): Promise<void> {
+  if (demoMode || !supabase) return;
+  await call('edit_challenge', { p_challenge: id, ...draftArgs(d) });
+}
+
+export type FriendOfPlayer = { profile_id: string; display_name: string; username: string; avatar_url: string | null; mutual: boolean };
+export type FriendCounts = { friends: number; mutual: number };
+export type OpponentRow = { profile_id: string; display_name: string; username: string | null; avatar_url: string | null; placeholder: boolean; wins: number; losses: number; last_played: string };
+
+export async function fetchPlayerFriends(demoMode: boolean, profileId: string): Promise<FriendOfPlayer[]> {
+  if (demoMode || !supabase) return [];
+  const { data } = await supabase.rpc('player_friends', { p_profile: profileId });
+  return (data ?? []) as FriendOfPlayer[];
+}
+
+export async function fetchFriendCounts(demoMode: boolean, profileId: string): Promise<FriendCounts | null> {
+  if (demoMode || !supabase) return null;
+  const { data, error } = await supabase.rpc('friend_counts', { p_profile: profileId });
+  if (error) return null;
+  const row = (Array.isArray(data) ? data[0] : data) as FriendCounts | undefined;
+  return row ?? null;
+}
+
+export async function fetchPlayerOpponents(demoMode: boolean, profileId: string): Promise<OpponentRow[]> {
+  if (demoMode || !supabase) return [];
+  const { data } = await supabase.rpc('player_opponents', { p_profile: profileId });
+  return (data ?? []) as OpponentRow[];
+}
+
+// Win rate shows as a real percent once a player has this many games.
+export const winRateGames = 10;
+export function winRateText(wins: number, losses: number) {
+  const games = wins + losses;
+  if (games < winRateGames) return `${games}/${winRateGames}`;
+  return `${Math.round((wins / games) * 100)}%`;
+}
+export const winRateLabel = (wins: number, losses: number) => (wins + losses < winRateGames ? 'Win rate unlocks' : 'Win rate');

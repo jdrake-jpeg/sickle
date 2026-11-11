@@ -17,6 +17,8 @@ export type Court = {
   lights_until?: number | null;
   // A permanent note from an admin (parking, hours, rules). Never fades.
   admin_note?: string | null;
+  // What the person who added it wrote about it. Shown on the court page.
+  submission_note?: string | null;
   // Only you and your friends can see a private court.
   is_private?: boolean;
   // The player who added it (null for courts entered before accounts existed).
@@ -333,7 +335,7 @@ export function courtsNear<T extends { lat: number; lng: number }>(here: { lat: 
 // 2 hours (court_conditions in supabase/migrations). To change the timer,
 // change it there and in conditionHours below.
 export const conditionHours = 2;
-export type Condition = 'good' | 'wet' | 'windy' | 'icy' | 'crowded';
+export type Condition = 'good' | 'wet' | 'windy' | 'icy' | 'crowded' | 'closed';
 export type ConditionReport = { condition: Condition; note: string | null; reporter_name: string; created_at: string };
 
 export const conditions: { value: Condition; label: string; emoji: string }[] = [
@@ -342,6 +344,7 @@ export const conditions: { value: Condition; label: string; emoji: string }[] = 
   { value: 'windy', label: 'Windy', emoji: '💨' },
   { value: 'icy', label: 'Icy', emoji: '🧊' },
   { value: 'crowded', label: 'Crowded', emoji: '👥' },
+  { value: 'closed', label: 'Closed', emoji: '🚫' },
 ];
 
 export const conditionInfo = (c: Condition) => conditions.find((x) => x.value === c) ?? conditions[0];

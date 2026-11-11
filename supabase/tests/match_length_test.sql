@@ -38,6 +38,13 @@ insert into public.friendships (requester_id, addressee_id, status, accepted_at)
   ('00000000-0000-0000-0000-00000000ab01', '00000000-0000-0000-0000-00000000ab02', 'accepted', now()),
   ('00000000-0000-0000-0000-00000000ab03', '00000000-0000-0000-0000-00000000ab04', 'accepted', now());
 
+-- Everyone on a challenge says OK (the game is on once they all have).
+create function pg_temp.everyone_in(p uuid) returns void language plpgsql security definer as $$
+begin
+  update public.challenge_players set response = 'in', responded_at = now() where challenge_id = p;
+  perform public.challenge_refresh_status(p);
+end $$;
+
 set role authenticated;
 
 -- Teams: One + Two, Three + Four.
@@ -61,6 +68,8 @@ end $$;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ab03';
 select public.respond_to_challenge(pg_temp.id('one'), true);
 select public.respond_to_challenge(pg_temp.id('three'), true);
+select pg_temp.everyone_in(pg_temp.id('one'));
+select pg_temp.everyone_in(pg_temp.id('three'));
 
 -- Scores must fit the length.
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ab01';

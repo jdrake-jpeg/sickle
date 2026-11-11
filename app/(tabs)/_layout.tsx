@@ -1,7 +1,7 @@
 import { SymbolView, SymbolViewProps } from 'expo-symbols';
 import { Platform, type ColorValue } from 'react-native';
 import { router, Tabs } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { fonts } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
@@ -10,6 +10,7 @@ import { fetchFriends } from '@/lib/friends';
 import { needsMe, useChallengePolling, useChallenges } from '@/lib/matches';
 import { kv } from '@/lib/kv';
 import { usePushSetup } from '@/lib/notifications';
+import { useProfile } from '@/lib/profile';
 import { useTheme } from '@/lib/theme';
 
 function TabIcon({ name, color }: { name: SymbolViewProps['name']; color: ColorValue }) {
@@ -24,14 +25,27 @@ export default function TabLayout() {
 
   usePushSetup(Boolean(session) && !demoMode);
 
-  // First time in: show the welcome page once.
+  // First time in: show the welcome page once. The test account is welcomed
+  // every time you switch into it.
   const userId = session?.user.id ?? 'demo';
+  const { profile } = useProfile();
+  const isTest = Boolean(profile?.is_test);
+  const profileReady = Boolean(profile);
+  const testShownFor = useRef<string | null>(null);
   useEffect(() => {
+    // Wait for the profile, so we know if this is the test account.
+    if (session && !demoMode && !profileReady) return;
     const key = `sickle.welcomeSeen.${userId}`;
-    try {
-      if (kv.getItemSync(key)) return;
-    } catch {
-      return;
+    if (isTest) {
+      if (testShownFor.current === userId) return;
+      testShownFor.current = userId;
+    } else {
+      testShownFor.current = null;
+      try {
+        if (kv.getItemSync(key)) return;
+      } catch {
+        return;
+      }
     }
     const timer = setTimeout(() => {
       try {
@@ -42,7 +56,7 @@ export default function TabLayout() {
       router.push('/welcome');
     }, 400);
     return () => clearTimeout(timer);
-  }, [userId]);
+  }, [userId, isTest, profileReady, session, demoMode]);
 
   // Friend requests badge the Find people tab; new messages badge Profile, where your friends live.
   const [friendBadge, setFriendBadge] = useState(0);

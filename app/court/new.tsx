@@ -132,8 +132,7 @@ export default function NewCourtScreen() {
       Alert.alert("Couldn't add the court", error.message);
       return;
     }
-    if (profile?.is_admin) Alert.alert('Added', "It's on the map now.");
-    else Alert.alert('Thanks!', "An admin will check it's a real court. It shows on the map once it's approved.");
+    Alert.alert('Sent for review', profile?.is_admin ? "Every court is checked first, yours too. Approve it in Review courts and it goes on the map." : "An admin will check it's a real court. It shows on the map once it's approved.");
     router.back();
   };
 
@@ -175,7 +174,7 @@ export default function NewCourtScreen() {
         />
         <Body size={13} tone="muted">
           {visibility === 'public'
-            ? 'Everyone can find and play here. An admin checks it first, then it goes on the map.'
+            ? 'Everyone can find and play here. An admin checks it first, then it goes on the map. Your description shows on the court page.'
             : 'Saved right away. Only you and your friends can see it, and it is never sent to an admin. It can\'t be within 200 feet of a public court. Use the public one instead.'}
         </Body>
       </View>
@@ -220,8 +219,8 @@ export default function NewCourtScreen() {
       <LightsPicker value={lights} onChange={setLights} />
       {visibility === 'public' ? (
         <Field
-          label="Anything the admin should know? (optional)"
-          placeholder="Lights until 10, bring your own net"
+          label="Describe the court (optional)"
+          placeholder="Four courts behind the church. Lights until 10, bring your own net"
           value={note}
           onChangeText={setNote}
           multiline
@@ -230,7 +229,7 @@ export default function NewCourtScreen() {
         />
       ) : null}
 
-      <Button label={busy ? 'Sending…' : visibility === 'private' ? 'Save private court' : profile?.is_admin ? 'Add to the map' : 'Submit for review'} size="lg" disabled={busy || !ready} onPress={submit} />
+      <Button label={busy ? 'Sending…' : visibility === 'private' ? 'Save private court' : 'Submit for review'} size="lg" disabled={busy || !ready} onPress={submit} />
     </Screen>
   );
 }

@@ -43,6 +43,13 @@ insert into public.friendships (requester_id, addressee_id, status, accepted_at)
   ('00000000-0000-0000-0000-00000000ac01', '00000000-0000-0000-0000-00000000ac05', 'accepted', now()),
   ('00000000-0000-0000-0000-00000000ac03', '00000000-0000-0000-0000-00000000ac04', 'accepted', now());
 
+-- Everyone on a challenge says OK (the game is on once they all have).
+create function pg_temp.everyone_in(p uuid) returns void language plpgsql security definer as $$
+begin
+  update public.challenge_players set response = 'in', responded_at = now() where challenge_id = p;
+  perform public.challenge_refresh_status(p);
+end $$;
+
 set role authenticated;
 
 -- Teams: One + Two (ab), Three + Four (cd), One + Five (ae).
@@ -72,6 +79,7 @@ set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ac01';
 insert into ids select 'c1', public.send_challenge(pg_temp.id('ab'), pg_temp.id('cd'), '00000000-0000-0000-0000-00000000accc', now() + interval '1 day', 1::smallint);
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ac03';
 select public.respond_to_challenge(pg_temp.id('c1'), true);
+select pg_temp.everyone_in(pg_temp.id('c1'));
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ac01';
 insert into ids select 'm1', public.submit_match_result(pg_temp.id('c1'), '[[11,7]]');
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ac03';
@@ -117,6 +125,7 @@ set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ac01';
 insert into ids select 'c2', public.send_challenge(pg_temp.id('ab'), pg_temp.id('cd'), '00000000-0000-0000-0000-00000000accc', now() + interval '2 days');
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ac03';
 select public.respond_to_challenge(pg_temp.id('c2'), true);
+select pg_temp.everyone_in(pg_temp.id('c2'));
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000ac01';
 select pg_temp.expect_error($$select public.delete_team(pg_temp.id('ab'))$$, 'Finish or call off your games');
 select public.cancel_challenge(pg_temp.id('c2'));

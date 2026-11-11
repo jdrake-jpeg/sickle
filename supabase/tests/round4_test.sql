@@ -50,6 +50,13 @@ insert into public.friendships (requester_id, addressee_id, status, accepted_at)
   ('00000000-0000-0000-0000-0000000004a2', '00000000-0000-0000-0000-0000000004a8', 'accepted', now()),
   ('00000000-0000-0000-0000-0000000004a3', '00000000-0000-0000-0000-0000000004a8', 'accepted', now());
 
+-- Everyone on a challenge says OK (the game is on once they all have).
+create function pg_temp.everyone_in(p uuid) returns void language plpgsql security definer as $$
+begin
+  update public.challenge_players set response = 'in', responded_at = now() where challenge_id = p;
+  perform public.challenge_refresh_status(p);
+end $$;
+
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000004a1';
 insert into ids values ('t1', public.create_team('00000000-0000-0000-0000-0000000004a2', 'Aaa and Bbb'));
@@ -78,6 +85,7 @@ select pg_temp.expect_error($$select public.respond_to_challenge(pg_temp.id('c1'
 
 -- Ccc accepts and plays with Eee instead.
 select public.respond_to_challenge(pg_temp.id('c1'), true, pg_temp.id('t3'));
+select pg_temp.everyone_in(pg_temp.id('c1'));
 reset role;
 do $$ begin
   assert (select challenged_team_id from public.challenges where id = pg_temp.id('c1')) = pg_temp.id('t3'), 'team switched';
@@ -147,6 +155,7 @@ insert into ids select 'solo_b', team_id from public.player_teams_all('00000000-
 insert into ids select 's1', public.send_challenge(pg_temp.id('solo_a'), pg_temp.id('solo_b'), '00000000-0000-0000-0000-0000000004cc', now() + interval '2 days', 1::smallint);
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000004a2';
 select public.respond_to_challenge(pg_temp.id('s1'), true);
+select pg_temp.everyone_in(pg_temp.id('s1'));
 reset role;
 do $$ begin
   assert (select count(*) from public.group_chats where challenge_id = pg_temp.id('s1')) = 0, 'singles made no chat';

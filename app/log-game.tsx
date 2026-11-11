@@ -2,13 +2,13 @@ import { Link, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
+import { CourtPicker } from '@/components/CourtPicker';
 import { PersonPicker, usePeopleOptions } from '@/components/PersonPicker';
 import { DraftScores, ScoreEntry, toGameScores } from '@/components/ScoreEntry';
 import { TimeField, whenText } from '@/components/TimeWheel';
 import { Body, Button, Card, Chip, Screen, Segmented } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { courtsNear, useCourts } from '@/lib/courts';
-import { formatMiles } from '@/lib/format';
 import { getLocationIfAllowed, LatLng } from '@/lib/location';
 import { logGame } from '@/lib/matches';
 import { useProfile } from '@/lib/profile';
@@ -43,7 +43,6 @@ export default function LogGameScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [here, setHere] = useState<LatLng | null>(null);
-  const [moreCourts, setMoreCourts] = useState(false);
   // Names of people found by search, who aren't in the dropdown lists.
   const [known, setKnown] = useState<Record<string, string>>({});
   const pick = (set: (id: string | null) => void) => (id: string | null, name?: string) => {
@@ -128,23 +127,7 @@ export default function LogGameScreen() {
 
       <ScoreEntry teamA={teamA} teamB={teamB} value={draft.slice(0, bestOf)} onChange={(next) => setDraft([...next, ...draft.slice(next.length)])} />
 
-      <View style={{ gap: 8 }}>
-        <Body weight="semibold">Where did you play?</Body>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {(moreCourts ? nearby : nearby.slice(0, 3)).map((c) => (
-            <Chip
-              key={c.id}
-              label={c.miles !== null ? `${c.name} · ${formatMiles(Math.round(c.miles * 10) / 10)}` : c.name}
-              selected={courtId === c.id}
-              onPress={() => setCourtId(c.id)}
-            />
-          ))}
-        </View>
-        {!moreCourts && nearby.length > 3 ? <Button label={`See more (${nearby.length - 3})`} variant="outline" size="sm" style={{ alignSelf: 'flex-start' }} onPress={() => setMoreCourts(true)} /> : null}
-        <Link href="/court/new" asChild>
-          <Button label="Court not listed? Add it" variant="ghost" size="sm" style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
-        </Link>
-      </View>
+      <CourtPicker title="Where did you play?" value={courtId} onChange={setCourtId} />
 
       <View style={{ gap: 8 }}>
         <Body weight="semibold">When did you play?</Body>

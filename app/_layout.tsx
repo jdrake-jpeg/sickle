@@ -117,8 +117,9 @@ function RootLayoutNav() {
           <Stack.Screen name="chat/[id]" options={{ title: 'Chat' }} />
           <Stack.Screen name="group/[id]" options={{ title: 'Game chat' }} />
           <Stack.Screen name="chats" options={{ title: 'Chats' }} />
-          <Stack.Screen name="challenge/new" options={{ title: 'Send a challenge' }} />
-          <Stack.Screen name="challenge/player" options={{ title: 'Challenge a player' }} />
+          <Stack.Screen name="challenge/new" options={{ title: 'Challenge a player' }} />
+          <Stack.Screen name="opponents/[id]" options={{ title: 'Opponents' }} />
+          <Stack.Screen name="player-friends/[id]" options={{ title: 'Friends' }} />
           <Stack.Screen name="log-game" options={{ title: 'Log a game' }} />
           <Stack.Screen name="people" options={{ title: 'People I added' }} />
           <Stack.Screen name="game/[id]" options={{ title: 'Game' }} />

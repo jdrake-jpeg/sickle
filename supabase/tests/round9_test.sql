@@ -50,6 +50,13 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- Names and made up people
 -- ---------------------------------------------------------------------------
+-- Everyone on a challenge says OK (the game is on once they all have).
+create function pg_temp.everyone_in(p uuid) returns void language plpgsql security definer as $$
+begin
+  update public.challenge_players set response = 'in', responded_at = now() where challenge_id = p;
+  perform public.challenge_refresh_status(p);
+end $$;
+
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000009a1';
 
@@ -176,10 +183,13 @@ begin
   select * into r from public.my_challenges() where challenge_id = pg_temp.id('c1');
   assert r.needs_partner and not r.i_challenged, 'D sees it';
 end $$;
-select pg_temp.expect_error(format($$select public.respond_to_challenge(%L, true)$$, pg_temp.id('c1')), 'Pick your partner');
+-- Saying OK alone doesn't make it a game while their partner is still missing.
+select public.respond_to_challenge(pg_temp.id('c1'), true);
+do $$ begin assert (select status from public.my_challenges() where challenge_id = pg_temp.id('c1')) = 'pending', 'still pending without a partner'; end $$;
 select pg_temp.expect_error(format($$select public.accept_challenge_with_partner(%L, %L)$$, pg_temp.id('c1'), '00000000-0000-0000-0000-0000000009f1'), 'Your partner has to be');
 select pg_temp.expect_error(format($$select public.accept_challenge_with_partner(%L, %L)$$, pg_temp.id('c1'), '00000000-0000-0000-0000-0000000009a4'), 'Pick a partner');
 insert into ids values ('dc', public.accept_challenge_with_partner(pg_temp.id('c1'), '00000000-0000-0000-0000-0000000009a3'));
+select pg_temp.everyone_in(pg_temp.id('c1'));
 do $$
 declare r record;
 begin

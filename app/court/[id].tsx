@@ -173,6 +173,13 @@ export default function CourtScreen() {
         </Card>
       ) : null}
 
+      {court.submission_note ? (
+        <Card style={{ padding: 16, gap: 6 }}>
+          <SectionHeader title="About this court" />
+          <Body>{court.submission_note}</Body>
+        </Card>
+      ) : null}
+
       {court.admin_note ? (
         <Card style={{ padding: 16, gap: 6 }}>
           <SectionHeader title="Good to know" detail="From a Sickle admin" />
